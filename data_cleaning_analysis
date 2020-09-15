@@ -107,8 +107,7 @@ May_2020_Aug_2020 = subset(count_county, month_indicator == "May_2020_Aug_2020")
 count_county = data.frame(county = May_2019_Aug_2019$county, May_2019_Aug_2019 = May_2019_Aug_2019$n , May_2020_Aug_2020 = May_2020_Aug_2020$n)
 count_county
 ```
-Get the same graph as above expect just subset the data not meeting the date criteria to get the monthly data
-Get all
+Monthly count of all diagnosis by count
 ```{r}
 month_by_diag_fun = function(data){
 
@@ -171,9 +170,26 @@ count_diag
 Now just SCHIZOAFFECTIVE 
 ```{r}
 dat_SCHIZOAFFECTIVE = tn_schiz_dat
-dat_SCHIZOAFFECTIVE$SCHIZOAFFECTIVE =  grepl("SCHIZOAFFECTIVE ", dat_SCHIZOAFFECTIVE$diagnosis)
+dat_SCHIZOAFFECTIVE$SCHIZOAFFECTIVE =  grepl("SCHIZOAFFECTIVE", dat_SCHIZOAFFECTIVE$diagnosis)
 dat_SCHIZOAFFECTIVE = subset(dat_SCHIZOAFFECTIVE, SCHIZOAFFECTIVE == TRUE)
 dat_SCHIZOAFFECTIVE
 month_by_diag_fun(dat_SCHIZOAFFECTIVE)
+```
+Now just SCHIZOPHRENIA 
+```{r}
+dat_SCHIZOPHRENIA  = tn_schiz_dat
+dat_SCHIZOPHRENIA$SCHIZOPHRENIA =  grepl("SCHIZOPHRENIA", dat_SCHIZOPHRENIA$diagnosis)
+dat_SCHIZOPHRENIA = subset(dat_SCHIZOPHRENIA, SCHIZOPHRENIA == TRUE)
+month_by_diag_fun(dat_SCHIZOPHRENIA)
+```
+Now get all others
+```{r}
+dat_other  = tn_schiz_dat
+dat_other$SCHIZOPHRENIA =  grepl("SCHIZOPHRENIA", dat_other$diagnosis)
+dat_other$SCHIZOAFFECTIVE =  grepl("SCHIZOAFFECTIVE", dat_other$diagnosis)
+dat_other = subset(dat_other, SCHIZOPHRENIA == FALSE & SCHIZOAFFECTIVE == FALSE)
+dat_other
+month_by_diag_fun(dat_other)
+
 ```
 
