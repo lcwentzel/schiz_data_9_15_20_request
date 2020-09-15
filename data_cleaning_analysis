@@ -1,0 +1,82 @@
+---
+title: "Test"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load data 
+```{r}
+setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/CTS_grant_docs/Otsuka/data")
+tn_schiz_data = read.csv("TN_schiz_data.csv", header = TRUE)
+### Need Client.ID, Admission.Last.Service.Date, Service.Location.County, Diagnosis.Type.Diagnosis.Description, Client.Intake.Referrals.Client.Age, Gender.Gender, Race.Type.Race.Type
+tn_schiz_dat = tn_schiz_data[c("Client.ID", "Admission.Last.Service.Date", "Service.Location.County", "Diagnosis.Type.Diagnosis.Description", "Client.Intake.Referrals.Client.Age", "Gender.Gender", "Race.Type.Race.Type")]
+names(tn_schiz_dat) = c("client_id", "admin_date", "county", "diagnosis", "age", "gender", "race")
+tn_schiz_dat
+library(prettyR)
+# Check for variables outside of reasonable range
+apply(tn_schiz_dat[,2:7], 2, function(x){describe.factor(x)})
+```
+Subset by 18 and older and between  May 1, 2019 and August 2020
+```{r}
+tn_schiz_dat = subset(tn_schiz_dat, age > 17)
+sum(tn_schiz_dat$age < 18)
+library(lubridate)
+tn_schiz_dat$admin_date = ymd(tn_schiz_dat$admin_date)
+tn_schiz_dat = subset(tn_schiz_dat, admin_date >= "2019-05-01" & admin_date <= "2020-08-31")
+sum(tn_schiz_dat$admin_date < "2019-05-01" | tn_schiz_dat$admin_date > "2020-08-31")
+```
+We can see that 
+```{r}
+
+```
+
+Need one record by client with the primary diagnosis OR the diagnosis that trumps “unspecified”
+For duplicates identified those with the first ID as unspecified
+Then 
+Assuming duplicate diagnoses are repeats need to check this assumption and try to find secondary and third diag
+```{r}
+library(dplyr)
+tn_schiz_dat$dup_var =  duplicated(tn_schiz_dat$client_id)
+tn_schiz_dat
+# sort by id
+tn_schiz_dat = tn_schiz_dat[order(tn_schiz_dat$client_id),]
+# Shows that code below works
+vec <- c("a", "b", "c","c","c")
+#vec =  vec %in% unique(vec[ duplicated(vec)]) 
+#vec
+tn_schiz_dat$dup_var_all =  tn_schiz_dat$client_id %in% unique(tn_schiz_dat$client_id[duplicated(tn_schiz_dat$client_id)])
+tn_schiz_dat$first_dup = ifelse(tn_schiz_dat$dup_var == FALSE & tn_schiz_dat$dup_var_all == TRUE, 1, 0)
+tn_schiz_dat$uspec_first_dup
+### Check that are no more than 2 duplicates
+count_id =  tn_schiz_dat %>% count(client_id)
+# There are up to six instances / diagnosis per client
+describe.factor(count_id$n)
+```
+1. Get non-first duplicate id and unspecified
+2. Drop those who have non-first duplicate id and unspecified
+3. Get first duplicate id and unspecified
+4. Drop those who have first duplicate id and unspecifed
+5. Drop remaining duplicates leaving you with highest diagnosis level that is not unspecified
+```{r}
+describe.factor(tn_schiz_dat$diagnosis)
+tn_schiz_dat$dup_diag_not_unspec = ifelse(tn_schiz_dat$dup_var_all == 1 & tn_schiz_dat$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER", 1, 0)
+tn_schiz_dat$non_first_dup_and_unspec = ifelse(tn_schiz_dat$dup_var == TRUE & tn_schiz_dat$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER", 1, 0)
+tn_schiz_dat = subset(tn_schiz_dat, non_first_dup_and_unspec == 0)
+tn_schiz_dat$first_dup_unspec = ifelse(tn_schiz_dat$first_dup == TRUE & tn_schiz_dat$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER", 1, 0)
+### EVen though no instances just drop in case you load in data later with repeats
+describe.factor(tn_schiz_dat$first_dup_unspec)
+tn_schiz_dat = subset(tn_schiz_dat, first_dup_unspec == 0)
+### Keep highest level of diagnosis that is not unspecified
+tn_schiz_dat = subset(tn_schiz_dat, dup_var == FALSE)
+dim(tn_schiz_dat)
+```
+Now get graphs
+```{r}
+tn_schiz_dat$admin_date = floor_date(tn_schiz_dat$admin_date, unit = c("month"))
+tn_schiz_dat = tn_schiz_dat[,c(1:7)]
+tn_schiz_dat
+```
+
