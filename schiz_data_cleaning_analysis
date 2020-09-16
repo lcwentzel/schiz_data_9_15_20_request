@@ -39,75 +39,91 @@ library(prettyR)
 # Check for variables outside of reasonable range
 #apply(non_tn_schiz_data[,2:9], 2, function(x){describe.factor(x)})
 ```
-Subset by 18 and older and between  May 1, 2019 and August 2020
+Subset by 18 and older 
+between  May 1, 2019 and August 2020
 Don't have May 1 2019 starting at July 1 2019
-Remove remaining NAs
-Only include those at admission
 ```{r}
 #This removes the NAs for Age
-non_tn_non_tn_schiz_data = subset(non_tn_non_tn_schiz_data, age > 17)
-sum(non_tn_non_tn_schiz_data$age < 18)
-describe.factor(non_tn_non_tn_schiz_data$age)
-dim(non_tn_non_tn_schiz_data)
-library(lubridate)
-non_tn_non_tn_schiz_data$admin_date = mdy(non_tn_non_tn_schiz_data$admin_date)
-non_tn_non_tn_schiz_data$admin_date = floor_date(non_tn_non_tn_schiz_data$admin_date, unit = c("month"))
-non_tn_non_tn_schiz_data = subset(non_tn_non_tn_schiz_data, admin_date >= "2019-05-01" & admin_date <= "2020-08-31")
-sum(non_tn_non_tn_schiz_data$admin_date < "2019-05-01" | non_tn_non_tn_schiz_data$admin_date > "2020-08-31")
 
-non_tn_non_tn_schiz_data = subset(non_tn_non_tn_schiz_data, diag_type_code == "A")
-dim(non_tn_non_tn_schiz_data)
+
+schiz_data = subset( schiz_data, age > 17 | is.na(age))
+sum(is.na(schiz_data$age))
+sum(schiz_data$age < 18, na.rm = TRUE)
+library(lubridate)
+schiz_data$admin_date = ymd(schiz_data$admin_date)
+schiz_data$admin_date = floor_date( schiz_data$admin_date, unit = c("month"))
+schiz_data = subset( schiz_data, admin_date >= "2019-05-01" & admin_date <= "2020-08-31")
+sum( schiz_data$admin_date < "2019-05-01" |  schiz_data$admin_date > "2020-08-31")
+dim(schiz_data)
 ```
-Need one record by client with the primary diagnosis OR the diagnosis that trumps “unspecified”
+Figure out all the codes now
+These are the codes for unspecified and SCHIZOPHRENIA
+SCHIZOPHRENIA, UNSPECIFIED
+SCHIZOAFFECTIVE DISORDER, UNSPECIFIED
+OTHER SCHIZOAFFECTIVE DISORDERS
+UNDIFFERENTIATED SCHIZOPHRENIA
+OTHER SCHIZOPHRENIA
+OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION
+UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER
+OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER
+SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED
+
+Create a unspecified schiz variable
+```{r}
+library(prettyR)
+describe.factor(schiz_data$diagnosis)
+schiz_data$unspec_var = ifelse(schiz_data$diagnosis == "SCHIZOPHRENIA, UNSPECIFIED" | schiz_data$diagnosis== "SCHIZOAFFECTIVE DISORDER, UNSPECIFIED" | schiz_data$diagnosis == "OTHER SCHIZOAFFECTIVE DISORDERS" | schiz_data$diagnosis == "UNDIFFERENTIATED SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION" | schiz_data$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED", 1, 0) 
+test = subset(schiz_data, diagnosis == "SCHIZOPHRENIA, UNSPECIFIED")
+sum(test$unspec_var) == dim(test)[1]
+```
+
+Need one record by client with the "primary diagnosis" or first instance OR the diagnosis that trumps “unspecified”
 For duplicates identified those with the first ID as unspecified
-Assuming duplicate diagnoses are repeats need to check this assumption and try to find secondary and third diag
+Assuming duplicate diagnoses are repeats 
 ```{r}
 library(dplyr)
-non_tn_non_tn_schiz_data$dup_var =  duplicated(non_tn_non_tn_schiz_data$client_id)
-non_tn_non_tn_schiz_data
+schiz_data$dup_var =  duplicated( schiz_data$client_id)
+schiz_data
 # sort by id
-non_tn_non_tn_schiz_data = non_tn_non_tn_schiz_data[order(non_tn_non_tn_schiz_data$client_id),]
+schiz_data =  schiz_data[order( schiz_data$client_id),]
 # Shows that code below works
 #vec <- c("a", "b", "c","c","c")
 #vec =  vec %in% unique(vec[ duplicated(vec)]) 
 #vec
-non_tn_non_tn_schiz_data$dup_var_all =  non_tn_non_tn_schiz_data$client_id %in% unique(non_tn_non_tn_schiz_data$client_id[duplicated(non_tn_non_tn_schiz_data$client_id)])
-non_tn_non_tn_schiz_data$first_dup = ifelse(non_tn_non_tn_schiz_data$dup_var == FALSE & non_tn_non_tn_schiz_data$dup_var_all == TRUE, 1, 0)
-non_tn_non_tn_schiz_data$uspec_first_dup
-### Check that are no more than 2 duplicates
-count_id =  non_tn_non_tn_schiz_data %>% count(client_id)
-# There are up to six instances / diagnosis per client
-describe.factor(count_id$n)
+schiz_data$dup_var_all =   schiz_data$client_id %in% unique( schiz_data$client_id[duplicated( schiz_data$client_id)])
+schiz_data$first_dup = ifelse( schiz_data$dup_var == FALSE &  schiz_data$dup_var_all == TRUE, 1, 0)
 
 ```
-Get diagnosis descriptions
-```{r}
-describe.factor(non_tn_non_tn_schiz_data$diagnosis)
-```
-
 1. Get non-first duplicate id and unspecified
 2. Drop those who have non-first duplicate id and unspecified
-3. Get first duplicate id and unspecified
-4. Drop those who have first duplicate id and unspecifed
-5. Drop remaining duplicates leaving you with highest diagnosis level that is not unspecified
+3. Overwrite all duplicate variables and update based on the dropping above 
+4. Get first duplicate id and unspecified
+5. Drop those who have first duplicate id and unspecifed (will only drop duplicates based on previous dropping)
+6. Drop remaining duplicates leaving you with highest diagnosis level that is not unspecified
 ```{r}
-describe.factor(non_tn_non_tn_schiz_data$diagnosis)
-non_tn_non_tn_schiz_data$dup_diag_not_unspec = ifelse(non_tn_non_tn_schiz_data$dup_var_all == 1 & non_tn_non_tn_schiz_data$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER", 1, 0)
-non_tn_non_tn_schiz_data$non_first_dup_and_unspec = ifelse(non_tn_non_tn_schiz_data$dup_var == TRUE & non_tn_non_tn_schiz_data$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER", 1, 0)
-non_tn_non_tn_schiz_data = subset(non_tn_non_tn_schiz_data, non_first_dup_and_unspec == 0)
-non_tn_non_tn_schiz_data$first_dup_unspec = ifelse(non_tn_non_tn_schiz_data$first_dup == TRUE & non_tn_non_tn_schiz_data$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER", 1, 0)
+describe.factor( schiz_data$diagnosis)
+schiz_data$non_first_dup_and_unspec = ifelse(schiz_data$dup_var == TRUE &  schiz_data$unspec_var == 1, 1, 0)
+schiz_data = subset( schiz_data, non_first_dup_and_unspec == 0)
+### Do this in case some clients has two duplicates and we removed their second duplicate above meaning that client is no longer a duplicate
+schiz_data$dup_var = duplicated(schiz_data$client_id)
+schiz_data$dup_var_all =   schiz_data$client_id %in% unique( schiz_data$client_id[duplicated( schiz_data$client_id)])
+schiz_data$first_dup = ifelse( schiz_data$dup_var == FALSE &  schiz_data$dup_var_all == TRUE, 1, 0)
+schiz_data
+
+
+schiz_data$first_dup_unspec = ifelse(schiz_data$first_dup == TRUE &  schiz_data$unspec_var==1, 1, 0)
 ### EVen though no instances just drop in case you load in data later with repeats
-non_tn_non_tn_schiz_data = subset(non_tn_non_tn_schiz_data, first_dup_unspec == 0)
+schiz_data = subset( schiz_data, first_dup_unspec == 0)
 ### Keep highest level of diagnosis that is not unspecified
-non_tn_non_tn_schiz_data = subset(non_tn_non_tn_schiz_data, dup_var == FALSE)
-n = dim(non_tn_non_tn_schiz_data)[1]
-non_tn_non_tn_schiz_data$admin_date = floor_date(non_tn_non_tn_schiz_data$admin_date, unit = c("month"))
-non_tn_non_tn_schiz_data = non_tn_non_tn_schiz_data[,c(1:7)]
-non_tn_non_tn_schiz_data$schz = rep(1, dim(non_tn_non_tn_schiz_data)[1])
+schiz_data = subset( schiz_data, dup_var == FALSE)
+n = dim( schiz_data)[1]
+schiz_data$schz = rep(1, dim( schiz_data)[1])
+schiz_data =  schiz_data[,1:9]
+apply(schiz_data[,2:9], 2, function(x){describe.factor(x)})
 ```
 Table by diagnosis
 ```{r}
-count_diag = non_tn_non_tn_schiz_data %>% count(diagnosis)
+count_diag =  schiz_data %>% count(diagnosis)
 count_diag = count_diag[order(count_diag$n, decreasing = TRUE),]
 count_diag
 ```
@@ -116,7 +132,7 @@ Need to get the number of clients served per year, but even with that this is a 
 
 ```{r}
 
-count_month = non_tn_non_tn_schiz_data %>% group_by(admin_date) %>% count(schz)
+count_month =  schiz_data %>% group_by(admin_date) %>% count(schz)
 count_month$percentage_pop = round(count_month$n / n,2)*100
 count_month
 ```
@@ -124,10 +140,10 @@ Table by county by four month period
 We want the count by four month period (May 2019 to Aug 2019) and compare to same period 2020 by county and state
 Start with county then get state
 ```{r}
-n = dim(non_tn_non_tn_schiz_data)[1]
+n = dim( schiz_data)[1]
 # Create the two four month indicators May_2019_Aug_2019 and May_2020_Aug_2020
-non_tn_non_tn_schiz_data$month_indicator = ifelse(non_tn_non_tn_schiz_data$admin_date >= "2019-05-01" & non_tn_non_tn_schiz_data$admin_date <= "2019-08-01", "May_2019_Aug_2019", ifelse(non_tn_non_tn_schiz_data$admin_date >= "2020-05-01" & non_tn_non_tn_schiz_data$admin_date <= "2020-08-01",  "May_2020_Aug_2020", "Wrong"))
-count_county = subset(non_tn_non_tn_schiz_data,month_indicator != "Wrong")
+ schiz_data$month_indicator = ifelse( schiz_data$admin_date >= "2019-05-01" &  schiz_data$admin_date <= "2019-08-01", "May_2019_Aug_2019", ifelse( schiz_data$admin_date >= "2020-05-01" &  schiz_data$admin_date <= "2020-08-01",  "May_2020_Aug_2020", "Wrong"))
+count_county = subset( schiz_data,month_indicator != "Wrong")
 library(tidyverse)
 ## Need this plus .drop = FALSE to include counting zeros
 count_county <- count_county %>% modify_if(is.character, as.factor)
@@ -166,12 +182,12 @@ names(county) = "county"
 out_list = cbind(county = county, out_list)
 return(out_list)
 }
-month_by_diag_fun(non_tn_non_tn_schiz_data)
+month_by_diag_fun( schiz_data)
 ```
 Function above replicates
 ```{r}
-non_tn_non_tn_schiz_data$month_indicator = ifelse(non_tn_non_tn_schiz_data$admin_date >= "2019-05-01" & non_tn_non_tn_schiz_data$admin_date <= "2019-08-01", "May_2019_Aug_2019", ifelse(non_tn_non_tn_schiz_data$admin_date >= "2020-05-01" & non_tn_non_tn_schiz_data$admin_date <= "2020-08-01",  "May_2020_Aug_2020", "Wrong"))
-count_county = subset(non_tn_non_tn_schiz_data,month_indicator != "Wrong")
+ schiz_data$month_indicator = ifelse( schiz_data$admin_date >= "2019-05-01" &  schiz_data$admin_date <= "2019-08-01", "May_2019_Aug_2019", ifelse( schiz_data$admin_date >= "2020-05-01" &  schiz_data$admin_date <= "2020-08-01",  "May_2020_Aug_2020", "Wrong"))
+count_county = subset( schiz_data,month_indicator != "Wrong")
 count_county$month_indicator = NULL
 count_county <- count_county %>% modify_if(is.character, as.factor)
 count_county = count_county %>% group_by(admin_date, county) %>%  count(schz, .drop = FALSE)
@@ -201,7 +217,7 @@ count_diag
 
 Now just SCHIZOAFFECTIVE 
 ```{r}
-dat_SCHIZOAFFECTIVE = non_tn_non_tn_schiz_data
+dat_SCHIZOAFFECTIVE =  schiz_data
 dat_SCHIZOAFFECTIVE$SCHIZOAFFECTIVE =  grepl("SCHIZOAFFECTIVE", dat_SCHIZOAFFECTIVE$diagnosis)
 dat_SCHIZOAFFECTIVE = subset(dat_SCHIZOAFFECTIVE, SCHIZOAFFECTIVE == TRUE)
 dat_SCHIZOAFFECTIVE
@@ -209,14 +225,14 @@ month_by_diag_fun(dat_SCHIZOAFFECTIVE)
 ```
 Now just SCHIZOPHRENIA 
 ```{r}
-dat_SCHIZOPHRENIA  = non_tn_non_tn_schiz_data
+dat_SCHIZOPHRENIA  =  schiz_data
 dat_SCHIZOPHRENIA$SCHIZOPHRENIA =  grepl("SCHIZOPHRENIA", dat_SCHIZOPHRENIA$diagnosis)
 dat_SCHIZOPHRENIA = subset(dat_SCHIZOPHRENIA, SCHIZOPHRENIA == TRUE)
 month_by_diag_fun(dat_SCHIZOPHRENIA)
 ```
 Now get all others
 ```{r}
-dat_other  = non_tn_non_tn_schiz_data
+dat_other  =  schiz_data
 dat_other$SCHIZOPHRENIA =  grepl("SCHIZOPHRENIA", dat_other$diagnosis)
 dat_other$SCHIZOAFFECTIVE =  grepl("SCHIZOAFFECTIVE", dat_other$diagnosis)
 dat_other = subset(dat_other, SCHIZOPHRENIA == FALSE & SCHIZOAFFECTIVE == FALSE)
