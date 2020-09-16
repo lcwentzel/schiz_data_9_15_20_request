@@ -33,8 +33,8 @@ tn_schiz_data$diagnosis_ranking = ifelse(tn_schiz_data$diagnosis_ranking == "P",
 describe.factor(tn_schiz_data$diagnosis_ranking)
 
 # Now rbind all data
-schiz_data = rbind(non_tn_schiz_data, tn_schiz_data)
-
+#schiz_data = rbind(non_tn_schiz_data, tn_schiz_data)
+schiz_data = non_tn_schiz_data
 library(prettyR)
 # Check for variables outside of reasonable range
 #apply(non_tn_schiz_data[,2:9], 2, function(x){describe.factor(x)})
@@ -53,13 +53,7 @@ schiz_data = subset( schiz_data, service_date >= "2019-07-01" & service_date <= 
 sum( schiz_data$service_date < "2019-07-01" |  schiz_data$service_date > "2020-08-31")
 dim(schiz_data)
 ```
-Now check on why so many may 2019's
-```{r}
-n_test = dim(schiz_data)[1]
-test =  schiz_data %>% count(service_date)
-test$percentage_pop = round(test$n / n_test,2)*100
-test
-```
+
 
 
 For variables that have matching, change the ICD-9 to ICD-10
@@ -95,6 +89,8 @@ sum(test$unspec_var) == dim(test)[1]
 Need one record by client with the "primary diagnosis" or first instance OR the diagnosis that trumps “unspecified”
 For duplicates identified those with the first ID as unspecified
 Assuming duplicate diagnoses are repeats 
+Order by ID and then ranking so if you take the first ID you getting the primary if they are duplicates
+
 ```{r}
 library(dplyr)
 schiz_data$dup_var =  duplicated(schiz_data$client_id)
@@ -107,18 +103,26 @@ schiz_data =  schiz_data[order( schiz_data$client_id),]
 #vec
 schiz_data$dup_var_all = schiz_data$client_id %in% unique( schiz_data$client_id[duplicated( schiz_data$client_id)])
 schiz_data$first_dup = ifelse( schiz_data$dup_var == FALSE &  schiz_data$dup_var_all == TRUE, 1, 0)
-
-
+### Order by ID and then ranking
+schiz_data = schiz_data[order(schiz_data$client_id, schiz_data$diagnosis_ranking),]
+schiz_data
 ```
 First person has the same client ID, same service date, different diagnosis, 
 ```{r}
 test = schiz_data
 ### Keep highest level of diagnosis that is not unspecified
-test  = test[c("client_id", "service_date", "dup_var_all", "diagnosis", "diagnosis_ranking")]
+#test  = test[c("client_id", "county", "service_date", "dup_var", "dup_var_all", "diagnosis", "diagnosis_ranking")]
 test = test[order(test$client_id, test$service_date),]
 test
-#test = subset(test, dup_var == FALSE)
 
+#test = subset(test, dup_var_all == TRUE)
+test_dup = test %>% distinct(client_id, .keep_all = TRUE)
+test_dup$service_date = floor_date( test_dup$service_date, unit = c("month"))
+n_test = dim(test)[1]
+count_month =  test_dup %>% count(service_date)
+count_month$percentage_pop = round(count_month$n / n_test,2)*100
+count_month$schz = NULL
+count_month
 #n = dim( schiz_data)[1]
 #schiz_data =  schiz_data[,1:9]
 #schiz_data$schz = rep(1, dim( schiz_data)[1])
@@ -135,9 +139,8 @@ test
 6. Identify those who have more than one ID in the same month.  We want clients per month assuming 
 6. Drop remaining duplicates leaving you with highest diagnosis level that is not unspecified
 ```{r}
-describe.factor( schiz_data$diagnosis)
 schiz_data$non_first_dup_and_unspec = ifelse(schiz_data$dup_var == TRUE &  schiz_data$unspec_var == 1, 1, 0)
-schiz_data = subset( schiz_data, non_first_dup_and_unspec == 0)
+schiz_data = subset(schiz_data, non_first_dup_and_unspec == 0)
 
 ### Do this in case some clients has two duplicates and we removed their second duplicate above meaning that client is no longer a duplicate
 schiz_data$dup_var = duplicated(schiz_data$client_id)
@@ -152,30 +155,21 @@ schiz_data = subset( schiz_data, first_dup_unspec == 0)
 ### Redo duplication because it changed
 schiz_data$dup_var = duplicated(schiz_data$client_id)
 ### Keep highest level of diagnosis that is not unspecified
-schiz_data = subset(schiz_data, dup_var == FALSE)
+schiz_data = schiz_data %>% distinct(client_id, .keep_all = TRUE)
 n = dim( schiz_data)[1]
 schiz_data =  schiz_data[,1:9]
 schiz_data$schz = rep(1, dim( schiz_data)[1])
 schiz_data$service_date = floor_date( schiz_data$service_date, unit = c("month"))
 ```
-Figure out what is going on with dates
+Check unique values
 ```{r}
-describe.factor(schiz_data$first_dup_unspec)
-
-test = subset( schiz_data, first_dup_unspec == 0)
-n_test = dim(test)[1]
-count_month =  test %>% count(service_date)
-count_month$percentage_pop = round(count_month$n / n_test,2)*100
-count_month$schz = NULL
-count_month
-
-
+schiz_data
 ```
-
 
 
 Table by diagnosis
 ```{r}
+schiz_data
 count_diag =  schiz_data %>% count(diagnosis) 
 count_diag = count_diag[order(count_diag$n, decreasing = TRUE),]
 count_diag$percentage_pop = round(count_diag$n / n,2)*100
@@ -211,7 +205,7 @@ May_2020_Aug_2020 = subset(count_county, month_indicator == "May_2020_Aug_2020")
 count_county = data.frame(county = May_2019_Aug_2019$county, May_2019_Aug_2019 = May_2019_Aug_2019$n , May_2020_Aug_2020 = May_2020_Aug_2020$n)
 count_county
 ```
-Monthly count of all diagnosis by countyy
+Monthly count of all diagnosis by county
 ```{r}
 month_by_diag_fun = function(data){
 
