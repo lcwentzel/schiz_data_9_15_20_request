@@ -99,37 +99,25 @@ sum(schiz_data$diagnosis == "UNSPECIFIED PSYCHOSIS")
 
 #Create a unspecified schiz variable
 library(prettyR)
-schiz_data$unspec_var = ifelse(schiz_data$diagnosis == "SCHIZOPHRENIA, UNSPECIFIED" | schiz_data$diagnosis== "SCHIZOAFFECTIVE DISORDER, UNSPECIFIED" | schiz_data$diagnosis == "OTHER SCHIZOAFFECTIVE DISORDERS" | schiz_data$diagnosis == "UNDIFFERENTIATED SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION" | schiz_data$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED", 1, 0) 
-schiz_data = schiz_data[order(schiz_data$client_id, schiz_data$unspec_var),]
-schiz_data$month_id_check = paste0(schiz_data$client_id, schiz_data$service_date)
-schiz_data$dup_id_date = schiz_data$month_id_check %in% unique(schiz_data$month_id_check[duplicated( schiz_data$month_id_check)])
-schiz_data$dup_id_date_true = paste0(schiz_data$month_id_check, schiz_data$dup_id_date)
-schiz_data = schiz_data %>% distinct(dup_id_date_true, .keep_all = TRUE)
-# Now we want to remove those who have a duplicate ID within the same month and the ID with the non unspecified (0), which will be first it is exists
-#schiz_data = schiz_data %>% distinct(client_id, .keep_all = TRUE)
-schiz_data
-### Testing that ordering works
-#test = data.frame(a = c(1,1,2,2), b = c(3, 2, 3, 2))
-#test[order(test$a, test$b),]
-#Testing that you have no more duplicates within a month
-### Are there still folks with a different diagnosis in the same month?
-#schiz_data$month_id_check = paste0(schiz_data$client_id, schiz_data$service_date)
-#schiz_data$dup_id_date = schiz_data$month_id_check %in% unique(schiz_data$month_id_check[duplicated( schiz_data$month_id_check)])
-#schiz_data
-#test = subset(schiz_data, dup_id_date == TRUE)
-#test = test[order(test$client_id),]
-#test
+schiz_data$unspec_var = ifelse(schiz_data$diagnosis == "SCHIZOPHRENIA, UNSPECIFIED" | schiz_data$diagnosis== "SCHIZOAFFECTIVE DISORDER, UNSPECIFIED" | schiz_data$diagnosis == "OTHER SCHIZOAFFECTIVE DISORDERS" | schiz_data$diagnosis == "UNDIFFERENTIATED SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION" | schiz_data$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED", 1, 0)
+
+
 schiz_data$month_id_check = NULL
 schiz_data$dup_id_date = NULL
 schiz_data$dup_id_date_true = NULL
 n = dim(schiz_data)[1]
 schiz_data$schz = rep(1, dim(schiz_data)[1])
 #### Running just TN schiz data
+#Now I want the number of clients with unique intake dates
+#We are assuming an intake means a new episode of care
+#So we need a new ID that is the combination of intake_date and ID and then only keep those that are unique
+#Only clients who have unique intake dates.
+#So I client could be a duplicate, but they have a new intake date so we are assuming the client is new
 
+schiz_data$id_intake_date = paste0(schiz_data$client_id, schiz_data$intake_date)
+dim(schiz_data)
+schiz_data = schiz_data = schiz_data %>% distinct(id_intake_date, .keep_all = TRUE)
 ```
-
-
-
 
 Check descriptives
 ```{r}
@@ -137,42 +125,6 @@ apply(schiz_data[-1], 2, function(x){describe.factor(x)})
 ```
 
 
-###########################
-Clean data schiz_data 
-###########################
-
-################################
-Problems with last service date
-################################
-First problem is that last service date is useless for non-TN
-```{r}
-non_tn_all_dat =  schiz_data[c("client_id", "service_date", "ICD_code", "last_service_date", "state")]
-non_tn_all_dat = subset(non_tn_all_dat, state != "TN")
-describe.factor(non_tn_all_dat$state)
-
-non_tn_all_dat = non_tn_all_dat[order(non_tn_all_dat$last_service_date),]
-non_tn_all_dat = non_tn_all_dat %>% count(last_service_date)
-non_tn_all_dat
-
-
-```
-The problem with last service date (the one in the original data set)
-I think if we are looking at last service, then folks at the end of the time frame will have more time to be included?
-Not really sure
-```{r}
-all_dat = schiz_data[c("client_id", "service_date", "ICD_code", "last_service_date")]
-all_dat = all_dat[order(all_dat$client_id, all_dat$last_service_date),]
-sum(duplicated(all_dat$client_id))
-all_dat_unique= all_dat %>% distinct(client_id, .keep_all = TRUE)
-all_dat_unique
-
-all_count = all_dat %>% count(last_service_date)
-all_count
-
-all_dat_unique_count =  all_dat_unique %>% count(last_service_date)
-all_dat_unique_count
-
-```
 Number of clients per month with a psychosis diagnosis who received a service
 ```{r}
 dim(all_dat)[1]-dim(all_dat_unique)[1]
