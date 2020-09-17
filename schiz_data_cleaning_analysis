@@ -14,6 +14,7 @@ setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/CTS_grant_docs/Otsuka/da
 #ci_cl_schiz_dat = read.csv("CIN_CIL_schz_dat_9_16_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
 ### Need Client.ID, Admission.Last.Service.Date, Service.Location.County, Diagnosis.Type.Diagnosis.Description, Client.Intake.Referrals.Client.Age, Gender.Gender, Race.Type.Race.Type
 ci_cl_schiz_dat
+
 ci_cl_schiz_data = ci_cl_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Client.Diagnosis.Diagnosis.Description", "Service.Age.at.Service", "Gender.Gender", "Race.Type.Race.Type", "Organization.Master.Organization.Headquarters.State.Abbreviation", "Client.Diagnosis.Ranking.Code", "Client.Diagnosis.ICD.Code", "Organization.Master.Last.Service.Date.Reported")]
 
 
@@ -29,6 +30,7 @@ names(fl_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "ag
 ## Load in the TN data set
 #tn_schiz_dat = read.csv("CTN_schz_dat_9_16_20.csv", header= TRUE, na.strings = c("<NULL>", "UNKNOWN"))
 ### Add a state variable
+
 tn_schiz_dat$state = rep("TN", dim(tn_schiz_dat)[1])
 
 tn_schiz_data = tn_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Diagnosis.Type.Diagnosis.Description", "Client.Intake.Referrals.Client.Age", "Gender.Gender", "Race.Type.Race.Type", "state", "Client.Diagnosis.Diagnosis.Sort", "Diagnosis.Type.Diagnostic.Code", "Admission.Last.Service.Date")]
@@ -157,6 +159,8 @@ all_dat_unique_count
 ```
 Number of clients per month with a psychosis diagnosis who received a service
 ```{r}
+dim(all_dat)[1]-dim(all_dat_unique)[1]
+
 count_month =  schiz_data %>% count(service_date)
 count_month$percentage_pop = round(count_month$n / n,2)*100
 count_month$schz = NULL
