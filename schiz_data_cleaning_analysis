@@ -72,12 +72,6 @@ schiz_data$intake_date = floor_date(schiz_data$intake_date, unit = "month")
 schiz_data = subset( schiz_data, service_date >= "2019-07-01" & service_date <= "2020-08-01")
 
 
-#What is a duplicate?
-#Someone who has the same ID, service_date (month), and ICD_Code
-#I flatted the month, so we are assuming a service date within the same with the same diagnosis are duplicates.
-schiz_data$dup_check = paste0(schiz_data$client_id, schiz_data$service_date, schiz_data$ICD_code)
-schiz_data = schiz_data %>% distinct(dup_check, .keep_all = TRUE)
-schiz_data$dup_check = NULL
 
 #### For those ICD-9 codes that have equals in ICD-10 change to ICD-10
 # Used this: https://www.icd10data.com/ and http://www.nyscouncil.org/wp-content/uploads/2014/01/DrD-DSM-5AlphaICD-9-10a.pdf
@@ -192,7 +186,9 @@ names(county) = "county"
 out_list = cbind(county = county, out_list)
 return(out_list)
 }
-month_by_diag_fun(schiz_data)
+
+test = month_by_diag_fun(schiz_data)
+write.csv(test, "test.csv", row.names = FALSE)
 ```
 Function above replicates
 ```{r}
