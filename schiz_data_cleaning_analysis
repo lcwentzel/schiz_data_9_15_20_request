@@ -27,7 +27,7 @@ fl_schiz_data =  fl_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.C
 names(fl_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date")
 
 ## Load in the TN data set
-tn_schiz_dat = read.csv("CTN_schz_dat_9_16_20.csv", header= TRUE, na.strings = c("<NULL>", "UNKNOWN"))
+#tn_schiz_dat = read.csv("CTN_schz_dat_9_16_20.csv", header= TRUE, na.strings = c("<NULL>", "UNKNOWN"))
 ### Add a state variable
 tn_schiz_dat$state = rep("TN", dim(tn_schiz_dat)[1])
 
@@ -50,127 +50,102 @@ sum(is.na(schiz_data$age))
 sum(schiz_data$age < 18, na.rm = TRUE)
 library(lubridate)
 
-schiz_data[c("service_date")] = ymd(schiz_data[c("service_date")])
+schiz_data$service_date = ymd(schiz_data$service_date)
 schiz_data$last_service_date = ymd(schiz_data$last_service_date)
 schiz_data$service_date =  floor_date(schiz_data$service_date, unit = "month")
 schiz_data$last_service_date = floor_date(schiz_data$last_service_date, unit = "month")
-schiz_data
-# Check for variables outside of reasonable range
-#apply(non_tn_schiz_data[,2:9], 2, function(x){describe.factor(x)})
-```
-Subset by 18 and older 
-between  May 1, 2019 and August 2020
-Don't have May 1 2019 starting at July 1 2019
-```{r}
+schiz_data = subset( schiz_data, service_date >= "2019-07-01" & service_date <= "2020-08-01")
 
-schiz_data = subset( schiz_data, service_date >= "2019-07-01" & service_date <= "2020-08-31")
-sum( schiz_data$service_date < "2019-07-01" |  schiz_data$service_date > "2020-08-31")
-dim(schiz_data)
-```
-For variables that have matching, change the ICD-9 to ICD-10
-```{r}
-library(dplyr)
+#What is a duplicate?
+#Someone who has the same ID, service_date (month), and ICD_Code
+#I flatted the month, so we are assuming a service date within the same with the same diagnosis are duplicates.
+schiz_data$dup_check = paste0(schiz_data$client_id, schiz_data$service_date, schiz_data$ICD_code)
+schiz_data = schiz_data %>% distinct(dup_check, .keep_all = TRUE)
+schiz_data$dup_check = NULL
+
+#### For those ICD-9 codes that have equals in ICD-10 change to ICD-10
+# Used this: https://www.icd10data.com/ and http://www.nyscouncil.org/wp-content/uploads/2014/01/DrD-DSM-5AlphaICD-9-10a.pdf
 schiz_data$diagnosis= recode(schiz_data$diagnosis, "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER"= "UNSPECIFIED PSYCHOSIS NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION", "PSYCHOTIC DISORDER DUE TO ANOTHER MEDICAL CONDITION  WITH DELUSIONS" = "PSYCHOTIC DISORDER WITH DELUSIONS DUE TO KNOWN PHYSIOLOGICAL CONDITION",  "PSYCHOTIC DISORDER DUE TO ANOTHER MEDICAL CONDITION  WITH HALLUCINATIONS" = "PSYCHOTIC DISORDER WITH HALLUCINATIONS DUE TO KNOWN PHYSIOLOGICAL CONDITION", "UNSPECIFIED PSYCHOSIS" = "UNSPECIFIED PSYCHOSIS NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION")
 sum(schiz_data$diagnosis == "UNSPECIFIED PSYCHOSIS")
 
-```
 
+#Figure out all the codes now
+#These are the codes for unspecified and SCHIZOPHRENIA
+#SCHIZOPHRENIA, UNSPECIFIED
+#SCHIZOAFFECTIVE DISORDER, UNSPECIFIED
+#OTHER SCHIZOAFFECTIVE DISORDERS
+#UNDIFFERENTIATED SCHIZOPHRENIA
+#OTHER SCHIZOPHRENIA
+#OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION
+#UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER
+#OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER
+#SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED
 
-Figure out all the codes now
-These are the codes for unspecified and SCHIZOPHRENIA
-SCHIZOPHRENIA, UNSPECIFIED
-SCHIZOAFFECTIVE DISORDER, UNSPECIFIED
-OTHER SCHIZOAFFECTIVE DISORDERS
-UNDIFFERENTIATED SCHIZOPHRENIA
-OTHER SCHIZOPHRENIA
-OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION
-UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER
-OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER
-SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED
-
-Create a unspecified schiz variable
-```{r}
+#Create a unspecified schiz variable
 library(prettyR)
 schiz_data$unspec_var = ifelse(schiz_data$diagnosis == "SCHIZOPHRENIA, UNSPECIFIED" | schiz_data$diagnosis== "SCHIZOAFFECTIVE DISORDER, UNSPECIFIED" | schiz_data$diagnosis == "OTHER SCHIZOAFFECTIVE DISORDERS" | schiz_data$diagnosis == "UNDIFFERENTIATED SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION" | schiz_data$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED", 1, 0) 
-test = subset(schiz_data, diagnosis == "SCHIZOPHRENIA, UNSPECIFIED")
-sum(test$unspec_var) == dim(test)[1]
-```
-
-Need one record by client with the "primary diagnosis" or first instance OR the diagnosis that trumps “unspecified”
-For duplicates identified those with the first ID as unspecified
-Assuming duplicate diagnoses are repeats 
-Order by ID and then ranking so if you take the first ID you getting the primary if they are duplicates
-
-```{r}
-library(dplyr)
-schiz_data$dup_var =  duplicated(schiz_data$client_id)
+schiz_data = schiz_data[order(schiz_data$client_id, schiz_data$unspec_var),]
+schiz_data$month_id_check = paste0(schiz_data$client_id, schiz_data$service_date)
+schiz_data$dup_id_date = schiz_data$month_id_check %in% unique(schiz_data$month_id_check[duplicated( schiz_data$month_id_check)])
+schiz_data$dup_id_date_true = paste0(schiz_data$month_id_check, schiz_data$dup_id_date)
+schiz_data = schiz_data %>% distinct(dup_id_date_true, .keep_all = TRUE)
+# Now we want to remove those who have a duplicate ID within the same month and the ID with the non unspecified (0), which will be first it is exists
+#schiz_data = schiz_data %>% distinct(client_id, .keep_all = TRUE)
 schiz_data
-# sort by id
-schiz_data =  schiz_data[order( schiz_data$client_id),]
-# Shows that code below works
-#vec <- c("a", "b", "c","c","c")
-#vec =  vec %in% unique(vec[ duplicated(vec)]) 
-#vec
-schiz_data$dup_var_all = schiz_data$client_id %in% unique( schiz_data$client_id[duplicated( schiz_data$client_id)])
-schiz_data$first_dup = ifelse( schiz_data$dup_var == FALSE &  schiz_data$dup_var_all == TRUE, 1, 0)
-### Order by ID and then ranking
-schiz_data = schiz_data[order(schiz_data$client_id, schiz_data$diagnosis_ranking),]
-schiz_data
+### Testing that ordering works
+#test = data.frame(a = c(1,1,2,2), b = c(3, 2, 3, 2))
+#test[order(test$a, test$b),]
+#Testing that you have no more duplicates within a month
+### Are there still folks with a different diagnosis in the same month?
+#schiz_data$month_id_check = paste0(schiz_data$client_id, schiz_data$service_date)
+#schiz_data$dup_id_date = schiz_data$month_id_check %in% unique(schiz_data$month_id_check[duplicated( schiz_data$month_id_check)])
+#schiz_data
+#test = subset(schiz_data, dup_id_date == TRUE)
+#test = test[order(test$client_id),]
+#test
+
 ```
-First person has the same client ID, same service date, different diagnosis, 
+
+
+
+
+Check descriptives
 ```{r}
-test = schiz_data
-### Keep highest level of diagnosis that is not unspecified
-#test  = test[c("client_id", "county", "service_date", "dup_var", "dup_var_all", "diagnosis", "diagnosis_ranking")]
-test = test[order(test$client_id, test$service_date),]
-test
 
-#test = subset(test, dup_var_all == TRUE)
-test_dup = test %>% distinct(client_id, .keep_all = TRUE)
-test_dup$service_date = floor_date( test_dup$service_date, unit = c("month"))
-n_test = dim(test)[1]
-count_month =  test_dup %>% count(service_date)
-count_month$percentage_pop = round(count_month$n / n_test,2)*100
-count_month$schz = NULL
-count_month
-#n = dim( schiz_data)[1]
-#schiz_data =  schiz_data[,1:9]
-#schiz_data$schz = rep(1, dim( schiz_data)[1])
+describe.factor(schiz_data$state)
 
+range(schiz_data$last_service_date)
+apply(schiz_data[-1], 2, function(x){describe.factor(x)})
 ```
 
 
+###########################
+Clean data schiz_data 
+###########################
 
-1. Get non-first duplicate id and unspecified
-2. Drop those who have non-first duplicate id and unspecified
-3. Overwrite all duplicate variables and update based on the dropping above 
-4. Get first duplicate id and unspecified
-5. Drop those who have first duplicate id and unspecified (will only drop duplicates based on previous dropping)
-6. Identify those who have more than one ID in the same month.  We want clients per month assuming 
-6. Drop remaining duplicates leaving you with highest diagnosis level that is not unspecified
+The problem with last service date (the one in the original data set)
+The problem is that clients have more opportunities to be counted at the end.
 ```{r}
-schiz_data$non_first_dup_and_unspec = ifelse(schiz_data$dup_var == TRUE &  schiz_data$unspec_var == 1, 1, 0)
-schiz_data = subset(schiz_data, non_first_dup_and_unspec == 0)
-
-### Do this in case some clients has two duplicates and we removed their second duplicate above meaning that client is no longer a duplicate
-schiz_data$dup_var = duplicated(schiz_data$client_id)
-schiz_data$dup_var_all =   schiz_data$client_id %in% unique( schiz_data$client_id[duplicated( schiz_data$client_id)])
-schiz_data$first_dup = ifelse( schiz_data$dup_var == FALSE &  schiz_data$dup_var_all == TRUE, 1, 0)
-schiz_data
-
-
-schiz_data$first_dup_unspec = ifelse(schiz_data$first_dup == TRUE &  schiz_data$unspec_var==1, 1, 0)
-### EVen though no instances just drop in case you load in data later with repeats
-schiz_data = subset( schiz_data, first_dup_unspec == 0)
-### Redo duplication because it changed
-schiz_data$dup_var = duplicated(schiz_data$client_id)
-### Keep highest level of diagnosis that is not unspecified
-schiz_data = schiz_data %>% distinct(client_id, .keep_all = TRUE)
-n = dim( schiz_data)[1]
-schiz_data =  schiz_data[,1:9]
-schiz_data$schz = rep(1, dim( schiz_data)[1])
-schiz_data$service_date = floor_date( schiz_data$service_date, unit = c("month"))
+all_dat = schiz_data[c("client_id", "service_date", "ICD_code", "last_service_date")]
+all_dat = all_dat[order(all_dat$last_service_date),]
+all_dat
+all_count = all_dat %>% count(last_service_date)
+all_count
 ```
+Last service date is useless for CIN, CIL, and CFL
+```{r}
+non_tn_all_dat =  schiz_data[c("client_id", "service_date", "ICD_code", "last_service_date", "state")]
+non_tn_all_dat = subset(non_tn_all_dat, state != "TN")
+describe.factor(non_tn_all_dat$state)
+
+non_tn_all_dat = non_tn_all_dat[order(non_tn_all_dat$last_service_date),]
+non_tn_all_dat = non_tn_all_dat %>% count(last_service_date)
+non_tn_all_dat
+
+
+```
+
+
 Check unique values
 ```{r}
 schiz_data
