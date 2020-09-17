@@ -11,31 +11,50 @@ Load data and clean names
 Treat <NULL> and UNKNOWN as missing
 ```{r}
 setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/CTS_grant_docs/Otsuka/data")
-#non_tn_schiz_dat = read.csv("CIN_CIL_CFL_schz_dat_9_16_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
+#ci_cl_schiz_dat = read.csv("CIN_CIL_schz_dat_9_16_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
 ### Need Client.ID, Admission.Last.Service.Date, Service.Location.County, Diagnosis.Type.Diagnosis.Description, Client.Intake.Referrals.Client.Age, Gender.Gender, Race.Type.Race.Type
-non_tn_schiz_data = non_tn_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Client.Diagnosis.Diagnosis.Description", "Service.Age.at.Service", "Gender.Gender", "Race.Type.Race.Type", "Organization.Master.Organization.Headquarters.State.Abbreviation", "Client.Diagnosis.Ranking.Code", "Client.Diagnosis.ICD.Code")]
+ci_cl_schiz_dat
+ci_cl_schiz_data = ci_cl_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Client.Diagnosis.Diagnosis.Description", "Service.Age.at.Service", "Gender.Gender", "Race.Type.Race.Type", "Organization.Master.Organization.Headquarters.State.Abbreviation", "Client.Diagnosis.Ranking.Code", "Client.Diagnosis.ICD.Code", "Organization.Master.Last.Service.Date.Reported")]
 
 
-names(non_tn_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code")
+names(ci_cl_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date")
+
+### Florida data
+#fl_schiz_dat = read.csv("FL_schz_dat_9_16_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
+
+fl_schiz_data =  fl_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Client.Diagnosis.Diagnosis.Description", "Service.Age.at.Service", "Gender.Gender", "Race.Type.Race.Type", "Organization.Master.Organization.Headquarters.State.Abbreviation", "Client.Diagnosis.Ranking.Code", "Client.Diagnosis.ICD.Code", "Organization.Master.Last.Service.Date.Reported")]
+
+names(fl_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date")
 
 ## Load in the TN data set
 tn_schiz_dat = read.csv("CTN_schz_dat_9_16_20.csv", header= TRUE, na.strings = c("<NULL>", "UNKNOWN"))
 ### Add a state variable
-tn_schiz_dat$state = rep("TN", dim(tn_schiz_data)[1])
+tn_schiz_dat$state = rep("TN", dim(tn_schiz_dat)[1])
 
-tn_schiz_data = tn_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Diagnosis.Type.Diagnosis.Description", "Client.Intake.Referrals.Client.Age", "Gender.Gender", "Race.Type.Race.Type", "state", "Client.Diagnosis.Diagnosis.Sort", "Diagnosis.Type.Diagnostic.Code")]
+tn_schiz_data = tn_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Diagnosis.Type.Diagnosis.Description", "Client.Intake.Referrals.Client.Age", "Gender.Gender", "Race.Type.Race.Type", "state", "Client.Diagnosis.Diagnosis.Sort", "Diagnosis.Type.Diagnostic.Code", "Admission.Last.Service.Date")]
 
 ## Change ranking variable to match non-TN
-names(tn_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code")
-describe.factor(tn_schiz_data$diagnosis_ranking)
+names(tn_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date")
+
 
 tn_schiz_data$diagnosis_ranking = ifelse(tn_schiz_data$diagnosis_ranking == "P", 1, ifelse(tn_schiz_data$diagnosis_ranking == "S", 2, 3))
 describe.factor(tn_schiz_data$diagnosis_ranking)
 
 # Now rbind all data
-#schiz_data = rbind(non_tn_schiz_data, tn_schiz_data)
-schiz_data = non_tn_schiz_data
+schiz_data = rbind(ci_cl_schiz_data, fl_schiz_data, tn_schiz_data)
+
 library(prettyR)
+
+schiz_data = subset( schiz_data, age > 17 | is.na(age))
+sum(is.na(schiz_data$age))
+sum(schiz_data$age < 18, na.rm = TRUE)
+library(lubridate)
+
+schiz_data[c("service_date")] = ymd(schiz_data[c("service_date")])
+schiz_data$last_service_date = ymd(schiz_data$last_service_date)
+schiz_data$service_date =  floor_date(schiz_data$service_date, unit = "month")
+schiz_data$last_service_date = floor_date(schiz_data$last_service_date, unit = "month")
+schiz_data
 # Check for variables outside of reasonable range
 #apply(non_tn_schiz_data[,2:9], 2, function(x){describe.factor(x)})
 ```
@@ -43,21 +62,12 @@ Subset by 18 and older
 between  May 1, 2019 and August 2020
 Don't have May 1 2019 starting at July 1 2019
 ```{r}
-schiz_data = subset( schiz_data, age > 17 | is.na(age))
-sum(is.na(schiz_data$age))
-sum(schiz_data$age < 18, na.rm = TRUE)
-library(lubridate)
-schiz_data$service_date = ymd(schiz_data$service_date)
 
 schiz_data = subset( schiz_data, service_date >= "2019-07-01" & service_date <= "2020-08-31")
 sum( schiz_data$service_date < "2019-07-01" |  schiz_data$service_date > "2020-08-31")
 dim(schiz_data)
 ```
-
-
-
 For variables that have matching, change the ICD-9 to ICD-10
-PSYCHOTIC DISORDER DUE TO ANOTHER MEDICAL CONDITION  WITH DELUSIONS
 ```{r}
 library(dplyr)
 schiz_data$diagnosis= recode(schiz_data$diagnosis, "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER"= "UNSPECIFIED PSYCHOSIS NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION", "PSYCHOTIC DISORDER DUE TO ANOTHER MEDICAL CONDITION  WITH DELUSIONS" = "PSYCHOTIC DISORDER WITH DELUSIONS DUE TO KNOWN PHYSIOLOGICAL CONDITION",  "PSYCHOTIC DISORDER DUE TO ANOTHER MEDICAL CONDITION  WITH HALLUCINATIONS" = "PSYCHOTIC DISORDER WITH HALLUCINATIONS DUE TO KNOWN PHYSIOLOGICAL CONDITION", "UNSPECIFIED PSYCHOSIS" = "UNSPECIFIED PSYCHOSIS NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION")
