@@ -103,7 +103,11 @@ schiz_data
 #test = subset(schiz_data, dup_id_date == TRUE)
 #test = test[order(test$client_id),]
 #test
-
+schiz_data$month_id_check = NULL
+schiz_data$dup_id_date = NULL
+schiz_data$dup_id_date_true = NULL
+n = dim(schiz_data)[1]
+schiz_data$schz = rep(1, dim(schiz_data)[1])
 ```
 
 
@@ -111,10 +115,6 @@ schiz_data
 
 Check descriptives
 ```{r}
-
-describe.factor(schiz_data$state)
-
-range(schiz_data$last_service_date)
 apply(schiz_data[-1], 2, function(x){describe.factor(x)})
 ```
 
@@ -123,16 +123,10 @@ apply(schiz_data[-1], 2, function(x){describe.factor(x)})
 Clean data schiz_data 
 ###########################
 
-The problem with last service date (the one in the original data set)
-The problem is that clients have more opportunities to be counted at the end.
-```{r}
-all_dat = schiz_data[c("client_id", "service_date", "ICD_code", "last_service_date")]
-all_dat = all_dat[order(all_dat$last_service_date),]
-all_dat
-all_count = all_dat %>% count(last_service_date)
-all_count
-```
-Last service date is useless for CIN, CIL, and CFL
+################################
+Problems with last service date
+################################
+First problem is that last service date is useless for non-TN
 ```{r}
 non_tn_all_dat =  schiz_data[c("client_id", "service_date", "ICD_code", "last_service_date", "state")]
 non_tn_all_dat = subset(non_tn_all_dat, state != "TN")
@@ -144,17 +138,34 @@ non_tn_all_dat
 
 
 ```
-
-
-Check unique values
+The problem with last service date (the one in the original data set)
+I think if we are looking at last service, then folks at the end of the time frame will have more time to be included?
+Not really sure
 ```{r}
-schiz_data
+all_dat = schiz_data[c("client_id", "service_date", "ICD_code", "last_service_date")]
+all_dat = all_dat[order(all_dat$client_id, all_dat$last_service_date),]
+sum(duplicated(all_dat$client_id))
+all_dat_unique= all_dat %>% distinct(client_id, .keep_all = TRUE)
+all_dat_unique
+
+all_count = all_dat %>% count(last_service_date)
+all_count
+
+all_dat_unique_count =  all_dat_unique %>% count(last_service_date)
+all_dat_unique_count
+
+```
+Number of clients per month with a psychosis diagnosis who received a service
+```{r}
+count_month =  schiz_data %>% count(service_date)
+count_month$percentage_pop = round(count_month$n / n,2)*100
+count_month$schz = NULL
+count_month
 ```
 
 
 Table by diagnosis
 ```{r}
-schiz_data
 count_diag =  schiz_data %>% count(diagnosis) 
 count_diag = count_diag[order(count_diag$n, decreasing = TRUE),]
 count_diag$percentage_pop = round(count_diag$n / n,2)*100
@@ -162,15 +173,7 @@ count_diag
 ```
 
 
-Table by month for all diagnoses
-Need to get the number of clients served per year, but even with that this is a very large spike
 
-```{r}
-count_month =  schiz_data %>% count(service_date)
-count_month$percentage_pop = round(count_month$n / n,2)*100
-count_month$schz = NULL
-count_month
-```
 Table by county by four month period
 We want the count by four month period (May 2019 to Aug 2019) and compare to same period 2020 by county and state
 Start with county then get state
