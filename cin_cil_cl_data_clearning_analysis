@@ -11,51 +11,15 @@ Load data and clean names
 Treat <NULL> and UNKNOWN as missing
 ```{r}
 setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/CTS_grant_docs/Otsuka/data")
-#ci_cl_schiz_dat = read.csv("CIN_CIL_schz_dat_9_16_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
+#CIN_CIL_CFL_schz_dat_9_20_20 = read.csv("CIN_CIL_CFL_schz_dat_9_20_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
 ### Need Client.ID, Admission.Last.Service.Date, Service.Location.County, Diagnosis.Type.Diagnosis.Description, Client.Intake.Referrals.Client.Age, Gender.Gender, Race.Type.Race.Type
+#CFL_schz_dat_9_20_20 = read.csv("CFL_schz_dat_9_20_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
+#schiz_dat = rbind(CIN_CIL_CFL_schz_dat_9_20_20, CFL_schz_dat_9_20_20)
 
-ci_cl_schiz_data = ci_cl_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Client.Diagnosis.Diagnosis.Description", "Service.Age.at.Service", "Gender.Gender", "Race.Type.Race.Type", "Organization.Master.Organization.Headquarters.State.Abbreviation", "Client.Diagnosis.Ranking.Code", "Client.Diagnosis.ICD.Code", "Organization.Master.Last.Service.Date.Reported")]
+schiz_data = schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Client.Diagnosis.Diagnosis.Description", "Service.Age.at.Service", "Gender.Gender", "Race.Type.Race.Type", "Organization.Master.Organization.Headquarters.State.Abbreviation", "Client.Diagnosis.Ranking.Code", "Client.Diagnosis.ICD.Code", "Client.Diagnosis.Episode.Number")]
 
+names(schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "EOC")
 
-names(ci_cl_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date")
-
-### Florida data
-fl_schiz_dat = read.csv("FL_schz_dat_9_16_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
-
-fl_schiz_data =  fl_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Client.Diagnosis.Diagnosis.Description", "Service.Age.at.Service", "Gender.Gender", "Race.Type.Race.Type", "Organization.Master.Organization.Headquarters.State.Abbreviation", "Client.Diagnosis.Ranking.Code", "Client.Diagnosis.ICD.Code", "Organization.Master.Last.Service.Date.Reported")]
-
-names(fl_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date")
-
-## Load in the TN data set
-#tn_schiz_dat = read.csv("CTN_schz_dat_9_16_20.csv", header= TRUE, na.strings = c("<NULL>", "UNKNOWN"))
-### Add a state variable
-
-tn_schiz_dat$state = rep("TN", dim(tn_schiz_dat)[1])
-
-
-### For all data combined
-#tn_schiz_data = tn_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Diagnosis.Type.Diagnosis.Description", "Client.Intake.Referrals.Client.Age", "Gender.Gender", "Race.Type.Race.Type", "state", "Client.Diagnosis.Diagnosis.Sort", "Diagnosis.Type.Diagnostic.Code", "Admission.Last.Service.Date")]
-
-
-tn_schiz_data = tn_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Diagnosis.Type.Diagnosis.Description", "Client.Intake.Referrals.Client.Age", "Gender.Gender", "Race.Type.Race.Type", "state", "Client.Diagnosis.Diagnosis.Sort", "Diagnosis.Type.Diagnostic.Code", "Admission.Last.Service.Date", "Admission.Intake.Date")]
-
-
-## Change ranking variable to match non-TN
-## For all combined data
-names(tn_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date")
-
-names(tn_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date", "intake_date")
-
-
-tn_schiz_data$diagnosis_ranking = ifelse(tn_schiz_data$diagnosis_ranking == "P", 1, ifelse(tn_schiz_data$diagnosis_ranking == "S", 2, 3))
-describe.factor(tn_schiz_data$diagnosis_ranking)
-
-# Now rbind all data
-#schiz_data = rbind(ci_cl_schiz_data, fl_schiz_data, tn_schiz_data)
-### Running just TN data
-schiz_data = tn_schiz_data
-
-library(prettyR)
 
 schiz_data = subset( schiz_data, age > 17 | is.na(age))
 sum(is.na(schiz_data$age))
@@ -63,14 +27,19 @@ sum(schiz_data$age < 18, na.rm = TRUE)
 library(lubridate)
 
 schiz_data$service_date = ymd(schiz_data$service_date)
-schiz_data$last_service_date = ymd(schiz_data$last_service_date)
-schiz_data$service_date =  floor_date(schiz_data$service_date, unit = "month")
-schiz_data$last_service_date = floor_date(schiz_data$last_service_date, unit = "month")
-schiz_data$intake_date = ymd(schiz_data$intake_date)
-schiz_data$intake_date = floor_date(schiz_data$intake_date, unit = "month")
+#schiz_data$service_date =  floor_date(schiz_data$service_date, unit = "month")
 dim(schiz_data)
-schiz_data = subset( schiz_data, service_date >= "2019-07-01" & service_date <= "2020-08-01")
-
+schiz_data
+####### 
+# Get ID and EOC new ID
+# Remove duplicates so you just keep the first ID associated with each episode care
+# Then remove anyone not in the desired date range
+# Could be missing those with a new episode of care
+schiz_data$id_eoc = paste0(schiz_data$client_id, schiz_data$EOC)
+schiz_data = schiz_data = schiz_data %>% distinct(id_eoc, .keep_all = TRUE)
+schiz_data[c("client_id", "service_date", "EOC", "id_eoc")]
+schiz_data = subset( schiz_data, service_date >= "2019-07-01" & service_date <= "2020-08-31")
+schiz_data
 
 
 #### For those ICD-9 codes that have equals in ICD-10 change to ICD-10
@@ -96,21 +65,10 @@ library(prettyR)
 schiz_data$unspec_var = ifelse(schiz_data$diagnosis == "SCHIZOPHRENIA, UNSPECIFIED" | schiz_data$diagnosis== "SCHIZOAFFECTIVE DISORDER, UNSPECIFIED" | schiz_data$diagnosis == "OTHER SCHIZOAFFECTIVE DISORDERS" | schiz_data$diagnosis == "UNDIFFERENTIATED SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION" | schiz_data$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED", 1, 0)
 
 
-schiz_data$month_id_check = NULL
-schiz_data$dup_id_date = NULL
-schiz_data$dup_id_date_true = NULL
-n = dim(schiz_data)[1]
 schiz_data$schz = rep(1, dim(schiz_data)[1])
-#### Running just TN schiz data
-#Now I want the number of clients with unique intake dates
-#We are assuming an intake means a new episode of care
-#So we need a new ID that is the combination of intake_date and ID and then only keep those that are unique
-#Only clients who have unique intake dates.
-#So I client could be a duplicate, but they have a new intake date so we are assuming the client is new
-
-schiz_data$id_intake_date = paste0(schiz_data$client_id, schiz_data$intake_date)
-dim(schiz_data)
-schiz_data = schiz_data = schiz_data %>% distinct(id_intake_date, .keep_all = TRUE)
+sum(duplicated(schiz_data$client_id))
+schiz_data = schiz_data[order(schiz_data$client_id, schiz_data$EOC),]
+schiz_data[c("client_id", "service_date","EOC")]
 ```
 
 Check descriptives
