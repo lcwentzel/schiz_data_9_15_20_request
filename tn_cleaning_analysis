@@ -47,6 +47,7 @@ dim(schiz_data)
 
 #### For those ICD-9 codes that have equals in ICD-10 change to ICD-10
 # Used this: https://www.icd10data.com/ and http://www.nyscouncil.org/wp-content/uploads/2014/01/DrD-DSM-5AlphaICD-9-10a.pdf
+library(dplyr)
 schiz_data$diagnosis= recode(schiz_data$diagnosis, "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER"= "UNSPECIFIED PSYCHOSIS NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION", "PSYCHOTIC DISORDER DUE TO ANOTHER MEDICAL CONDITION  WITH DELUSIONS" = "PSYCHOTIC DISORDER WITH DELUSIONS DUE TO KNOWN PHYSIOLOGICAL CONDITION",  "PSYCHOTIC DISORDER DUE TO ANOTHER MEDICAL CONDITION  WITH HALLUCINATIONS" = "PSYCHOTIC DISORDER WITH HALLUCINATIONS DUE TO KNOWN PHYSIOLOGICAL CONDITION", "UNSPECIFIED PSYCHOSIS" = "UNSPECIFIED PSYCHOSIS NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION")
 sum(schiz_data$diagnosis == "UNSPECIFIED PSYCHOSIS")
 
@@ -74,8 +75,6 @@ schiz_data$schz = rep(1, dim(schiz_data)[1])
 
 schiz_data$id_intake_date = paste0(schiz_data$client_id, schiz_data$intake_date)
 dim(schiz_data)
-library(tidyr)
-library(dplyr)
 schiz_data = schiz_data = schiz_data %>% distinct(id_intake_date, .keep_all = TRUE)
 return(schiz_data)
 }
