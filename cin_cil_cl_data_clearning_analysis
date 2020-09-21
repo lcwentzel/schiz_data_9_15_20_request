@@ -20,7 +20,8 @@ schiz_data = schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County",
 
 names(schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "EOC")
 
-
+# Show problems with episode of care
+eoc_dat = schiz_data
 
 schiz_data = subset( schiz_data, age > 17 | is.na(age))
 sum(is.na(schiz_data$age))
@@ -35,40 +36,27 @@ schiz_data
 # Get
 # Could be missing those with a new episode of care
 schiz_data = schiz_data %>% dplyr::group_by(client_id) %>% dplyr::mutate(time = row_number()-1)
-#schiz_data[c("client_id", "service_date", "time")]
+# Create episode of id_eoc variable, then only include the first episode of care and with each id then limit time
 schiz_data = subset(schiz_data, time == 0)
-schiz_data[c("client_id", "service_date", "time")]
 schiz_data = subset( schiz_data, service_date >= "2019-07-01" & service_date <= "2020-08-01")
-
-
-
-#### For those ICD-9 codes that have equals in ICD-10 change to ICD-10
-# Used this: https://www.icd10data.com/ and http://www.nyscouncil.org/wp-content/uploads/2014/01/DrD-DSM-5AlphaICD-9-10a.pdf
-schiz_data$diagnosis= recode(schiz_data$diagnosis, "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER"= "UNSPECIFIED PSYCHOSIS NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION", "PSYCHOTIC DISORDER DUE TO ANOTHER MEDICAL CONDITION  WITH DELUSIONS" = "PSYCHOTIC DISORDER WITH DELUSIONS DUE TO KNOWN PHYSIOLOGICAL CONDITION",  "PSYCHOTIC DISORDER DUE TO ANOTHER MEDICAL CONDITION  WITH HALLUCINATIONS" = "PSYCHOTIC DISORDER WITH HALLUCINATIONS DUE TO KNOWN PHYSIOLOGICAL CONDITION", "UNSPECIFIED PSYCHOSIS" = "UNSPECIFIED PSYCHOSIS NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION")
-sum(schiz_data$diagnosis == "UNSPECIFIED PSYCHOSIS")
-
-
-#Figure out all the codes now
-#These are the codes for unspecified and SCHIZOPHRENIA
-#SCHIZOPHRENIA, UNSPECIFIED
-#SCHIZOAFFECTIVE DISORDER, UNSPECIFIED
-#OTHER SCHIZOAFFECTIVE DISORDERS
-#UNDIFFERENTIATED SCHIZOPHRENIA
-#OTHER SCHIZOPHRENIA
-#OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION
-#UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER
-#OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER
-#SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED
-
-#Create a unspecified schiz variable
-library(prettyR)
-schiz_data$unspec_var = ifelse(schiz_data$diagnosis == "SCHIZOPHRENIA, UNSPECIFIED" | schiz_data$diagnosis== "SCHIZOAFFECTIVE DISORDER, UNSPECIFIED" | schiz_data$diagnosis == "OTHER SCHIZOAFFECTIVE DISORDERS" | schiz_data$diagnosis == "UNDIFFERENTIATED SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION" | schiz_data$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED", 1, 0)
 
 
 schiz_data$schz = rep(1, dim(schiz_data)[1])
 n = dim(schiz_data)[1]
-schiz_data[c("client_id", "service_date", "time")]
 ```
+Show EOC problems
+```{r}
+
+eoc_dat$id_eoc = paste0(eoc_dat$client_id, eoc_dat$EOC)
+eoc_dat = eoc_dat = eoc_dat %>% distinct(id_eoc, .keep_all = TRUE)
+eoc_dat = subset( eoc_dat, service_date >= "2019-07-01" & service_date <= "2020-08-01")
+eoc_dat = eoc_dat[order(eoc_dat$client_id),]
+eoc_dat[c("client_id", "service_date", "EOC")]
+eoc_dat$id_date = paste0(eoc_dat$client_id, eoc_dat$service_date)
+sum(duplicated(eoc_dat$id_date))/n
+eoc_dat[c("client_id", "service_date", "EOC")]
+```
+
 
 Check descriptives
 ```{r}
@@ -81,8 +69,17 @@ Number of clients per month with a psychosis
 count_month =  schiz_data %>% group_by(service_date) %>% count(schz)
 count_month$percentage_pop = round(count_month$n / n,2)*100
 count_month$schz = NULL
-count_month = count_month[order(count_month$service_date),]
+count_month = ungroup(count_month)
 count_month
+write.csv(count_month, "count_month.csv", row.names = FALSE)
+library(gt)
+count_month_avatar = 
+  gt(count_month) %>%
+  tab_header(title = "Minimal change in schizophrenia diagnoses") %>%
+  cols_label(service_date = md("Date"), n = md("N"), percentage_pop = md("Percent of population"))
+count_month_avatar
+gtsave(count_month_avatar, "count_month_avatar.png")
+
 ```
 
 
@@ -100,11 +97,9 @@ describe.factor(schiz_data$county)
 count_county =  schiz_data %>% group_by(county) %>% count(schz) 
 count_county = count_county[order(count_county$n, decreasing = TRUE),]
 count_county$percentage_pop = round(count_county$n / n,2)*100
+count_county$schz = NULL
 count_county
-
 ```
-
-
 Monthly count of all diagnosis by county 
 You need to remove the 2 NA counties from 3-01-2020 
 ```{r}
@@ -139,6 +134,23 @@ cin_cil_cfl_all_county_by_month$mean = NULL
 
 write.csv(cin_cil_cfl_all_county_by_month, "cin_cil_cfl_all_county_by_month.csv", row.names = FALSE)
 ```
+Quick graph for barthlow 
+```{r}
+
+count_county <- schiz_data %>% modify_if(is.character, as.factor)
+count_county = count_county %>% group_by(service_date, county) %>%  count(schz, .drop = FALSE)
+count_county$schz = NULL
+count_county = na.omit(count_county)
+count_county = subset(count_county, county == "BARTHOLOMEW" | county == "MANATEE" | county == "WILLIAMSON")
+ggplot(data=count_county, aes(x= service_date, y=n, group=county)) +
+    geom_line(aes(color=county))+
+    geom_point(aes(color=county))+
+    labs(y="Number of clients with any schizophrenia disorder", x = "Date of first service")+
+    ggtitle("Bartholomew county sees rise of clients with any schizophrenia \n disorder in late Q3 and Q4")
+
+
+```
+
 
 
 Now just SCHIZOAFFECTIVE 
@@ -174,5 +186,22 @@ dat_other = subset(dat_other, SCHIZOPHRENIA == FALSE & SCHIZOAFFECTIVE == FALSE)
 cin_cil_cfl_other_county_by_month = month_by_diag_fun(dat_other)
 write.csv(cin_cil_cfl_other_county_by_month, "cin_cil_cfl_other_county_by_month.csv", row.names = FALSE)
 
+```
+Show the rise in all other diagnoses
+```{r}
+dat_other$SCHIZOPHRENIA =  grepl("SCHIZOPHRENIA", dat_other$diagnosis)
+dat_other$SCHIZOAFFECTIVE =  grepl("SCHIZOAFFECTIVE", dat_other$diagnosis)
+dat_other = subset(dat_other, SCHIZOPHRENIA == FALSE & SCHIZOAFFECTIVE == FALSE & county == "BARTHOLOMEW" | county == "MANATEE" | county == "WILLIAMSON")
+dat_other
+dat_other <- dat_other %>% modify_if(is.character, as.factor)
+dat_other = dat_other %>% group_by(service_date, county) %>%  count(schz, .drop = FALSE)
+dat_other$schz = NULL
+dat_other = na.omit(dat_other)
+
+ggplot(data=dat_other, aes(x= service_date, y=n, group=county)) +
+    geom_line(aes(color=county))+
+    geom_point(aes(color=county))+
+    labs(y="Number of clients with  an other schizophrenia disorder", x = "Date of first service")+
+    ggtitle("Bartholomew county sees rise of clients with an other schizophrenia \n disorder in late Q3 and Q4")
 ```
 
