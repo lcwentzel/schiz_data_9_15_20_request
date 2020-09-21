@@ -11,15 +11,22 @@ Load data and clean names
 Treat <NULL> and UNKNOWN as missing
 ```{r}
 setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/CTS_grant_docs/Otsuka/data")
-#CIN_CIL_CFL_schz_dat_9_20_20 = read.csv("CIN_CIL_CFL_schz_dat_9_20_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
-### Need Client.ID, Admission.Last.Service.Date, Service.Location.County, Diagnosis.Type.Diagnosis.Description, Client.Intake.Referrals.Client.Age, Gender.Gender, Race.Type.Race.Type
-#CFL_schz_dat_9_20_20 = read.csv("CFL_schz_dat_9_20_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
-schiz_dat = rbind(CIN_CIL_CFL_schz_dat_9_20_20, CFL_schz_dat_9_20_20)
+#tn_schiz_dat = read.csv("CTN_schz_dat_9_16_20.csv", header= TRUE, na.strings = c("<NULL>", "UNKNOWN"))
 
-schiz_data = schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Client.Diagnosis.Diagnosis.Description", "Service.Age.at.Service", "Gender.Gender", "Race.Type.Race.Type", "Organization.Master.Organization.Headquarters.State.Abbreviation", "Client.Diagnosis.Ranking.Code", "Client.Diagnosis.ICD.Code", "Client.Diagnosis.Episode.Number")]
+tn_data_cleaning = function(tn_schiz_dat){
+## Load in the TN data set
+### Add a state variable
+tn_schiz_dat$state = rep("TN", dim(tn_schiz_dat)[1])
 
-names(schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "EOC")
 
+tn_schiz_data = tn_schiz_dat[c("Client.ID", "Service.Date", "Service.Location.County", "Diagnosis.Type.Diagnosis.Description", "Client.Intake.Referrals.Client.Age", "Gender.Gender", "Race.Type.Race.Type", "state", "Client.Diagnosis.Diagnosis.Sort", "Diagnosis.Type.Diagnostic.Code", "Admission.Last.Service.Date", "Admission.Intake.Date")]
+
+names(tn_schiz_data) = c("client_id", "service_date", "county", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date", "intake_date")
+
+
+tn_schiz_data$diagnosis_ranking = ifelse(tn_schiz_data$diagnosis_ranking == "P", 1, ifelse(tn_schiz_data$diagnosis_ranking == "S", 2, 3))
+
+schiz_data = tn_schiz_data
 
 
 schiz_data = subset( schiz_data, age > 17 | is.na(age))
@@ -28,18 +35,14 @@ sum(schiz_data$age < 18, na.rm = TRUE)
 library(lubridate)
 
 schiz_data$service_date = ymd(schiz_data$service_date)
+schiz_data$last_service_date = ymd(schiz_data$last_service_date)
 schiz_data$service_date =  floor_date(schiz_data$service_date, unit = "month")
+schiz_data$last_service_date = floor_date(schiz_data$last_service_date, unit = "month")
+schiz_data$intake_date = ymd(schiz_data$intake_date)
+schiz_data$intake_date = floor_date(schiz_data$intake_date, unit = "month")
 dim(schiz_data)
-schiz_data
-####### 
-# Get
-# Could be missing those with a new episode of care
-schiz_data = schiz_data %>% dplyr::group_by(client_id) %>% dplyr::mutate(time = row_number()-1)
-#schiz_data[c("client_id", "service_date", "time")]
-schiz_data = subset(schiz_data, time == 0)
-schiz_data[c("client_id", "service_date", "time")]
-schiz_data = subset( schiz_data, service_date >= "2019-07-01" & service_date <= "2020-08-01")
-
+schiz_data = subset( schiz_data, intake_date >= "2019-07-01" & intake_date <= "2020-08-01")
+dim(schiz_data)
 
 
 #### For those ICD-9 codes that have equals in ICD-10 change to ICD-10
@@ -60,48 +63,64 @@ sum(schiz_data$diagnosis == "UNSPECIFIED PSYCHOSIS")
 #OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER
 #SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED
 
-#Create a unspecified schiz variable
-library(prettyR)
-schiz_data$unspec_var = ifelse(schiz_data$diagnosis == "SCHIZOPHRENIA, UNSPECIFIED" | schiz_data$diagnosis== "SCHIZOAFFECTIVE DISORDER, UNSPECIFIED" | schiz_data$diagnosis == "OTHER SCHIZOAFFECTIVE DISORDERS" | schiz_data$diagnosis == "UNDIFFERENTIATED SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER SCHIZOPHRENIA" | schiz_data$diagnosis == "OTHER PSYCHOTIC DISORDER NOT DUE TO A SUBSTANCE OR KNOWN PHYSIOLOGICAL CONDITION" | schiz_data$diagnosis == "UNSPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "OTHER SPECIFIED SCHIZOPHRENIA SPECTRUM AND OTHER PSYCHOTIC DISORDER" | schiz_data$diagnosis == "SCHIZOPHRENIA  DISORGANIZED TYPE UNSPECIFIED", 1, 0)
-
 
 schiz_data$schz = rep(1, dim(schiz_data)[1])
+#### Running just TN schiz data
+#Now I want the number of clients with unique intake dates
+#We are assuming an intake means a new episode of care
+#So we need a new ID that is the combination of intake_date and ID and then only keep those that are unique
+#Only clients who have unique intake dates.
+#So I client could be a duplicate, but they have a new intake date so we are assuming the client is new
+
+schiz_data$id_intake_date = paste0(schiz_data$client_id, schiz_data$intake_date)
+dim(schiz_data)
+library(tidyr)
+library(dplyr)
+schiz_data = schiz_data = schiz_data %>% distinct(id_intake_date, .keep_all = TRUE)
+return(schiz_data)
+}
+schiz_data = tn_data_cleaning(tn_schiz_dat)
 n = dim(schiz_data)[1]
-schiz_data[c("client_id", "service_date", "time")]
+schiz_data
 ```
+Number of duplicate IDs which means person who had multiple unique intakes within the time frame
+```{r}
+dup_ids = duplicated(schiz_data$client_id)
+sum(dup_ids)
+```
+
 
 Check descriptives
 ```{r}
+library(prettyR)
 apply(schiz_data[-1], 2, function(x){describe.factor(x)})
 ```
 
 
-Number of clients per month with a psychosis 
+Number of clients per month with an admin of psychosis
 ```{r}
-count_month =  schiz_data %>% group_by(service_date) %>% count(schz)
+count_month =  schiz_data %>% count(intake_date)
 count_month$percentage_pop = round(count_month$n / n,2)*100
 count_month$schz = NULL
-count_month = count_month[order(count_month$service_date),]
-count_month
+write.csv(count_month, "tn_count_month.csv", row.names = FALSE)
 ```
 
 
 Table by diagnosis
 ```{r}
-count_diag =  schiz_data %>% group_by(diagnosis) %>% count(schz) 
+count_diag =  schiz_data %>% count(diagnosis) 
 count_diag = count_diag[order(count_diag$n, decreasing = TRUE),]
 count_diag$percentage_pop = round(count_diag$n / n,2)*100
 count_diag
 ```
-
-By county
+Check function is correct
 ```{r}
-describe.factor(schiz_data$county)
-count_county =  schiz_data %>% group_by(county) %>% count(schz) 
-count_county = count_county[order(count_county$n, decreasing = TRUE),]
-count_county$percentage_pop = round(count_county$n / n,2)*100
-count_county
 
+count_county <- schiz_data %>% modify_if(is.character, as.factor)
+count_county = count_county %>% group_by(intake_date, county) %>%  count(schz, .drop = FALSE)
+count_county$schz = NULL
+count_county = na.omit(count_county)
+count_county
 ```
 
 
@@ -111,16 +130,15 @@ You need to remove the 2 NA counties from 3-01-2020
 month_by_diag_fun = function(data){
 
 count_county <- data %>% modify_if(is.character, as.factor)
-count_county = count_county %>% group_by(service_date, county) %>%  count(schz, .drop = FALSE)
+count_county = count_county %>% group_by(intake_date, county) %>%  count(schz, .drop = FALSE)
 count_county$schz = NULL
 count_county = na.omit(count_county)
-describe.factor(count_county$service_date, decr.order = FALSE)
 month_list = list("2019-07-01", "2019-08-01", "2019-09-01", "2019-10-01", "2019-11-01", "2019-12-01", "2020-01-01", "2020-02-01", "2020-03-01", "2020-04-01", "2020-05-01", "2020-06-01", "2020-07-01", "2020-08-01")
 out_list = list() 
 county = list()
 for(i in 1:length(month_list)){
-  out_list[[i]] = subset(count_county, service_date == month_list[[i]])
-  out_list[[i]]$service_date = NULL
+  out_list[[i]] = subset(count_county, intake_date == month_list[[i]])
+  out_list[[i]]$intake_date = NULL
   county[[i]] =  out_list[[1]]$county
   out_list[[i]]$county = NULL
 }
@@ -132,12 +150,12 @@ out_list = cbind(county = county, out_list)
 return(out_list)
 }
 
-cin_cil_cfl_all_county_by_month = month_by_diag_fun(schiz_data)
-cin_cil_cfl_all_county_by_month$mean = apply(cin_cil_cfl_all_county_by_month[-1], 1, mean)
-cin_cil_cfl_all_county_by_month = cin_cil_cfl_all_county_by_month[order(-cin_cil_cfl_all_county_by_month$mean),]
-cin_cil_cfl_all_county_by_month$mean = NULL
+tn_all_county_by_month = month_by_diag_fun(schiz_data)
+tn_all_county_by_month$sum = apply(tn_all_county_by_month[-1], 1, mean)
+tn_all_county_by_month = tn_all_county_by_month[order(-tn_all_county_by_month$sum),]
+tn_all_county_by_month$sum = NULL
 
-write.csv(cin_cil_cfl_all_county_by_month, "cin_cil_cfl_all_county_by_month.csv", row.names = FALSE)
+write.csv(tn_all_county_by_month, "tn_all_county_by_month.csv", row.names = FALSE)
 ```
 
 
@@ -147,23 +165,23 @@ dat_SCHIZOAFFECTIVE =  schiz_data
 dat_SCHIZOAFFECTIVE$SCHIZOAFFECTIVE =  grepl("SCHIZOAFFECTIVE", dat_SCHIZOAFFECTIVE$diagnosis)
 dat_SCHIZOAFFECTIVE = subset(dat_SCHIZOAFFECTIVE, SCHIZOAFFECTIVE == TRUE)
 
-cin_cil_cfl_SCHIZOAFFECTIVE_county_by_month =  month_by_diag_fun(dat_SCHIZOAFFECTIVE)
-cin_cil_cfl_SCHIZOAFFECTIVE_county_by_month$sum = apply(cin_cil_cfl_SCHIZOAFFECTIVE_county_by_month[-1], 1, mean)
-cin_cil_cfl_SCHIZOAFFECTIVE_county_by_month = cin_cil_cfl_SCHIZOAFFECTIVE_county_by_month[order(-cin_cil_cfl_SCHIZOAFFECTIVE_county_by_month$sum),]
-cin_cil_cfl_SCHIZOAFFECTIVE_county_by_month$sum = NULL
-write.csv(cin_cil_cfl_SCHIZOAFFECTIVE_county_by_month, "cin_cil_cfl_SCHIZOAFFECTIVE_county_by_month.csv", row.names = FALSE)
+tn_SCHIZOAFFECTIVE_county_by_month =  month_by_diag_fun(dat_SCHIZOAFFECTIVE)
+tn_SCHIZOAFFECTIVE_county_by_month$sum = apply(tn_SCHIZOAFFECTIVE_county_by_month[-1], 1, mean)
+tn_SCHIZOAFFECTIVE_county_by_month = tn_SCHIZOAFFECTIVE_county_by_month[order(-tn_SCHIZOAFFECTIVE_county_by_month$sum),]
+tn_SCHIZOAFFECTIVE_county_by_month$sum = NULL
+write.csv(tn_SCHIZOAFFECTIVE_county_by_month, "tn_SCHIZOAFFECTIVE_county_by_month.csv", row.names = FALSE)
 ```
 Now just SCHIZOPHRENIA 
 ```{r}
 dat_SCHIZOPHRENIA  =  schiz_data
 dat_SCHIZOPHRENIA$SCHIZOPHRENIA =  grepl("SCHIZOPHRENIA", dat_SCHIZOPHRENIA$diagnosis)
 dat_SCHIZOPHRENIA = subset(dat_SCHIZOPHRENIA, SCHIZOPHRENIA == TRUE)
-cin_cil_cfl_SCHIZOPHRENIA_county_by_month =  month_by_diag_fun(dat_SCHIZOPHRENIA)
-cin_cil_cfl_SCHIZOPHRENIA_county_by_month$sum = apply(cin_cil_cfl_SCHIZOPHRENIA_county_by_month[-1], 1, mean)
-cin_cil_cfl_SCHIZOPHRENIA_county_by_month = cin_cil_cfl_SCHIZOPHRENIA_county_by_month[order(-cin_cil_cfl_SCHIZOPHRENIA_county_by_month$sum),]
-cin_cil_cfl_SCHIZOPHRENIA_county_by_month$sum = NULL
+tn_SCHIZOPHRENIA_county_by_month =  month_by_diag_fun(dat_SCHIZOPHRENIA)
+tn_SCHIZOPHRENIA_county_by_month$sum = apply(tn_SCHIZOPHRENIA_county_by_month[-1], 1, mean)
+tn_SCHIZOPHRENIA_county_by_month = tn_SCHIZOPHRENIA_county_by_month[order(-tn_SCHIZOPHRENIA_county_by_month$sum),]
+tn_SCHIZOPHRENIA_county_by_month$sum = NULL
 
-write.csv(cin_cil_cfl_SCHIZOPHRENIA_county_by_month, "cin_cil_cfl_SCHIZOPHRENIA_county_by_month.csv", row.names = FALSE)
+write.csv(tn_SCHIZOPHRENIA_county_by_month, "tn_SCHIZOPHRENIA_county_by_month.csv", row.names = FALSE)
 ```
 Now get all others
 ```{r}
@@ -171,8 +189,8 @@ dat_other  =  schiz_data
 dat_other$SCHIZOPHRENIA =  grepl("SCHIZOPHRENIA", dat_other$diagnosis)
 dat_other$SCHIZOAFFECTIVE =  grepl("SCHIZOAFFECTIVE", dat_other$diagnosis)
 dat_other = subset(dat_other, SCHIZOPHRENIA == FALSE & SCHIZOAFFECTIVE == FALSE)
-cin_cil_cfl_other_county_by_month = month_by_diag_fun(dat_other)
-write.csv(cin_cil_cfl_other_county_by_month, "cin_cil_cfl_other_county_by_month.csv", row.names = FALSE)
+tn_other_county_by_month = month_by_diag_fun(dat_other)
+write.csv(tn_other_county_by_month, "tn_other_county_by_month.csv", row.names = FALSE)
 
 ```
 
