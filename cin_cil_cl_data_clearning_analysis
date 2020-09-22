@@ -11,14 +11,14 @@ Load data and clean names
 Treat <NULL> and UNKNOWN as missing
 ```{r}
 setwd("S:/Indiana Research & Evaluation/Matthew Hanauer/CTS_grant_docs/Otsuka/data")
-#CIN_CIL_CFL_schz_dat_9_20_20 = read.csv("CIN_CIL_CFL_schz_dat_9_21_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
+#CIN_CIL_CFL_schz_dat_9_22_20 = read.csv("CIN_CIL_CFL_schz_dat_9_22_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
 ### Need Client.ID, Admission.Last.Service.Date, Service.Location.County, Diagnosis.Type.Diagnosis.Description, Client.Intake.Referrals.Client.Age, Gender.Gender, Race.Type.Race.Type
 #CFL_schz_dat_9_20_20 = read.csv("CFL_schz_dat_9_21_20.csv", header = TRUE, na.strings = c("<NULL>", "UNKNOWN"))
-schiz_dat = rbind(CIN_CIL_CFL_schz_dat_9_20_20, CFL_schz_dat_9_20_20)
+schiz_dat = CIN_CIL_CFL_schz_dat_9_22_20
 
-schiz_data = schiz_dat[c("Client.ID", "Service.Date", "Service.Location.Location.Name", "Client.Diagnosis.Diagnosis.Description", "Service.Age.at.Service", "Gender.Gender", "Race.Type.Race.Type", "Organization.Master.Organization.Headquarters.State.Abbreviation", "Client.Diagnosis.ICD.Code", "Client.Diagnosis.Episode.Number")]
+schiz_data = schiz_dat[c("Client.ID", "Service.Date", "Service.Location.Location.Name", "Client.Diagnosis.Diagnosis.Description", "Service.Age.at.Service", "Gender.Gender", "Race.Type.Race.Type", "Organization.Master.Organization.Headquarters.State.Abbreviation", "Client.Diagnosis.ICD.Code", "Service.Location.County")]
 
-names(schiz_data) = c("client_id", "service_date", "clinic", "diagnosis", "age", "gender", "race", "state", "ICD_code", "EOC")
+names(schiz_data) = c("client_id", "service_date", "clinic", "diagnosis", "age", "gender", "race", "state", "ICD_code", "county")
 
 # Show problems with episode of care
 eoc_dat = schiz_data
@@ -43,18 +43,6 @@ schiz_data = subset( schiz_data, service_date >= "2019-07-01" & service_date <= 
 
 schiz_data$schz = rep(1, dim(schiz_data)[1])
 n = dim(schiz_data)[1]
-```
-Show EOC problems
-```{r}
-
-eoc_dat$id_eoc = paste0(eoc_dat$client_id, eoc_dat$EOC)
-eoc_dat = eoc_dat = eoc_dat %>% distinct(id_eoc, .keep_all = TRUE)
-eoc_dat = subset( eoc_dat, service_date >= "2019-07-01" & service_date <= "2020-08-01")
-eoc_dat = eoc_dat[order(eoc_dat$client_id),]
-eoc_dat[c("client_id", "service_date", "EOC")]
-eoc_dat$id_date = paste0(eoc_dat$client_id, eoc_dat$service_date)
-sum(duplicated(eoc_dat$id_date))/n
-eoc_dat[c("client_id", "service_date", "EOC")]
 ```
 
 
@@ -107,7 +95,7 @@ library(mlr3misc)
 month_by_diag_fun = function(data){
 
 count_clinic <- data %>% modify_if(is.character, as.factor)
-count_clinic = count_clinic %>% group_by(service_date, state, clinic) %>%  count(schz, .drop = FALSE)
+count_clinic = count_clinic %>% group_by(service_date, county, state, clinic) %>%  count(schz, .drop = FALSE)
 count_clinic$schz = NULL
 count_clinic = na.omit(count_clinic)
 describe.factor(count_clinic$service_date, decr.order = FALSE)
@@ -115,6 +103,7 @@ month_list = list("2019-07-01", "2019-08-01", "2019-09-01", "2019-10-01", "2019-
 out_list = list() 
 clinic = list()
 state = list()
+county = list()
 for(i in 1:length(month_list)){
   out_list[[i]] = subset(count_clinic, service_date == month_list[[i]])
   out_list[[i]]$service_date = NULL
@@ -122,18 +111,23 @@ for(i in 1:length(month_list)){
   out_list[[i]]$clinic = NULL
   state[[i]] = out_list[[1]]$state
   out_list[[i]]$state = NULL
+  county[[i]] =  out_list[[1]]$county
+  out_list[[i]]$county = NULL
 }
 out_list = data.frame(out_list)
 names(out_list) = c("Jul 2019", "Aug 2019", "Sep 2019", "Oct 2019", "Nov 2019", "Dec 2019", "Jan 2020", "Feb 2020", "Mar 2020", "Apr 2020", "May 2020", "June 2020", "July 2020", "Aug 2020")
 clinic = data.frame(clinic = clinic)
+state = data.frame(state = state)
+county = data.frame(county = county)
 names(clinic) = "clinic"
 names(state) = "state"
-out_list = cbind(clinic = clinic, state = state, out_list)
+names(county) = "county"
+out_list = cbind(clinic = clinic, county = county, state = state, out_list)
 return(out_list)
 }
 
 cin_cil_cfl_all_clinic_by_month = month_by_diag_fun(schiz_data)
-cin_cil_cfl_all_clinic_by_month$mean = apply(cin_cil_cfl_all_clinic_by_month[-c(1,2)], 1, mean, na.rm = TRUE)
+cin_cil_cfl_all_clinic_by_month$mean = apply(cin_cil_cfl_all_clinic_by_month[-c(1,2,3)], 1, mean, na.rm = TRUE)
 cin_cil_cfl_all_clinic_by_month = cin_cil_cfl_all_clinic_by_month[order(-cin_cil_cfl_all_clinic_by_month$mean),]
 cin_cil_cfl_all_clinic_by_month$mean = NULL
 
@@ -147,7 +141,7 @@ dat_SCHIZOAFFECTIVE$SCHIZOAFFECTIVE =  grepl("SCHIZOAFFECTIVE", dat_SCHIZOAFFECT
 dat_SCHIZOAFFECTIVE = subset(dat_SCHIZOAFFECTIVE, SCHIZOAFFECTIVE == TRUE)
 
 cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month =  month_by_diag_fun(dat_SCHIZOAFFECTIVE)
-cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month$sum = apply(cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month[-c(1,2)], 1, mean)
+cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month$sum = apply(cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month[-c(1,2,3)], 1, mean)
 cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month = cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month[order(-cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month$sum),]
 cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month$sum = NULL
 write.csv(cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month, "cin_cil_cfl_SCHIZOAFFECTIVE_clinic_by_month.csv", row.names = FALSE)
@@ -158,7 +152,7 @@ dat_SCHIZOPHRENIA  =  schiz_data
 dat_SCHIZOPHRENIA$SCHIZOPHRENIA =  grepl("SCHIZOPHRENIA", dat_SCHIZOPHRENIA$diagnosis)
 dat_SCHIZOPHRENIA = subset(dat_SCHIZOPHRENIA, SCHIZOPHRENIA == TRUE)
 cin_cil_cfl_SCHIZOPHRENIA_clinic_by_month =  month_by_diag_fun(dat_SCHIZOPHRENIA)
-cin_cil_cfl_SCHIZOPHRENIA_clinic_by_month$sum = apply(cin_cil_cfl_SCHIZOPHRENIA_clinic_by_month[-c(1,2)], 1, mean)
+cin_cil_cfl_SCHIZOPHRENIA_clinic_by_month$sum = apply(cin_cil_cfl_SCHIZOPHRENIA_clinic_by_month[-c(1,2,3)], 1, mean)
 cin_cil_cfl_SCHIZOPHRENIA_clinic_by_month = cin_cil_cfl_SCHIZOPHRENIA_clinic_by_month[order(-cin_cil_cfl_SCHIZOPHRENIA_clinic_by_month$sum),]
 cin_cil_cfl_SCHIZOPHRENIA_clinic_by_month$sum = NULL
 
