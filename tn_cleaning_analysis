@@ -19,9 +19,9 @@ tn_data_cleaning = function(tn_schiz_dat){
 tn_schiz_dat$state = rep("TN", dim(tn_schiz_dat)[1])
 
 
-tn_schiz_data = tn_schiz_dat[c("Client.ID", "Service.Date", "Service.Client.Program.Location.Name", "Diagnosis.Type.Diagnosis.Description", "Client.Intake.Referrals.Client.Age", "Gender.Gender", "Race.Type.Race.Type", "state", "Client.Diagnosis.Diagnosis.Sort", "Diagnosis.Type.Diagnostic.Code", "Admission.Last.Service.Date", "Admission.Intake.Date")]
+tn_schiz_data = tn_schiz_dat[c("Client.ID", "Service.Date", "Service.Client.Program.Location.Name", "Diagnosis.Type.Diagnosis.Description", "Client.Intake.Referrals.Client.Age", "Gender.Gender", "Race.Type.Race.Type", "state", "Client.Diagnosis.Diagnosis.Sort", "Diagnosis.Type.Diagnostic.Code", "Admission.Last.Service.Date", "Admission.Intake.Date", "Service.Location.County")]
 
-names(tn_schiz_data) = c("client_id", "service_date", "clinic", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date", "intake_date")
+names(tn_schiz_data) = c("client_id", "service_date", "clinic", "diagnosis", "age", "gender", "race", "state", "diagnosis_ranking", "ICD_code", "last_service_date", "intake_date", "county")
 
 
 tn_schiz_data$diagnosis_ranking = ifelse(tn_schiz_data$diagnosis_ranking == "P", 1, ifelse(tn_schiz_data$diagnosis_ranking == "S", 2, 3))
@@ -116,7 +116,7 @@ Check function is correct
 ```{r}
 
 count_clinic <- schiz_data %>% modify_if(is.character, as.factor)
-count_clinic = count_clinic %>% group_by(intake_date, state, clinic) %>%  count(schz, .drop = FALSE)
+count_clinic = count_clinic %>% group_by(intake_date, county, state, clinic) %>%  count(schz, .drop = FALSE)
 count_clinic$schz = NULL
 count_clinic = na.omit(count_clinic)
 count_clinic
@@ -129,28 +129,35 @@ You need to remove the 2 NA counties from 3-01-2020
 month_by_diag_fun = function(data){
 
 count_clinic <- data %>% modify_if(is.character, as.factor)
-count_clinic = count_clinic %>% group_by(intake_date, clinic) %>%  count(schz, .drop = FALSE)
+count_clinic = count_clinic %>% group_by(intake_date, county, clinic) %>%  count(schz, .drop = FALSE)
 count_clinic$schz = NULL
 count_clinic = na.omit(count_clinic)
 month_list = list("2019-07-01", "2019-08-01", "2019-09-01", "2019-10-01", "2019-11-01", "2019-12-01", "2020-01-01", "2020-02-01", "2020-03-01", "2020-04-01", "2020-05-01", "2020-06-01", "2020-07-01", "2020-08-01")
 out_list = list() 
 clinic = list()
+county = list()
 for(i in 1:length(month_list)){
   out_list[[i]] = subset(count_clinic, intake_date == month_list[[i]])
   out_list[[i]]$intake_date = NULL
   clinic[[i]] =  out_list[[1]]$clinic
   out_list[[i]]$clinic = NULL
+  county[[i]] = out_list[[1]]$county
+  out_list[[i]]$county = NULL
+  
+  
 }
 out_list = data.frame(out_list)
 names(out_list) = c("Jul 2019", "Aug 2019", "Sep 2019", "Oct 2019", "Nov 2019", "Dec 2019", "Jan 2020", "Feb 2020", "Mar 2020", "Apr 2020", "May 2020", "June 2020", "July 2020", "Aug 2020")
 clinic = data.frame(clinic = clinic)
 names(clinic) = "clinic"
-out_list = cbind(clinic = clinic, out_list)
+county = data.frame(county = county)
+names(county) = "county"
+out_list = cbind(county = county, clinic = clinic, out_list)
 return(out_list)
 }
 
 tn_all_clinic_by_month = month_by_diag_fun(schiz_data)
-tn_all_clinic_by_month$sum = apply(tn_all_clinic_by_month[-1], 1, mean)
+tn_all_clinic_by_month$sum = apply(tn_all_clinic_by_month[-c(1,2)], 1, mean)
 tn_all_clinic_by_month = tn_all_clinic_by_month[order(-tn_all_clinic_by_month$sum),]
 tn_all_clinic_by_month$sum = NULL
 
@@ -165,7 +172,7 @@ dat_SCHIZOAFFECTIVE$SCHIZOAFFECTIVE =  grepl("SCHIZOAFFECTIVE", dat_SCHIZOAFFECT
 dat_SCHIZOAFFECTIVE = subset(dat_SCHIZOAFFECTIVE, SCHIZOAFFECTIVE == TRUE)
 
 tn_SCHIZOAFFECTIVE_clinic_by_month =  month_by_diag_fun(dat_SCHIZOAFFECTIVE)
-tn_SCHIZOAFFECTIVE_clinic_by_month$sum = apply(tn_SCHIZOAFFECTIVE_clinic_by_month[-1], 1, mean)
+tn_SCHIZOAFFECTIVE_clinic_by_month$sum = apply(tn_SCHIZOAFFECTIVE_clinic_by_month[-c(1,2)], 1, mean)
 tn_SCHIZOAFFECTIVE_clinic_by_month = tn_SCHIZOAFFECTIVE_clinic_by_month[order(-tn_SCHIZOAFFECTIVE_clinic_by_month$sum),]
 tn_SCHIZOAFFECTIVE_clinic_by_month$sum = NULL
 write.csv(tn_SCHIZOAFFECTIVE_clinic_by_month, "tn_SCHIZOAFFECTIVE_clinic_by_month.csv", row.names = FALSE)
@@ -176,7 +183,7 @@ dat_SCHIZOPHRENIA  =  schiz_data
 dat_SCHIZOPHRENIA$SCHIZOPHRENIA =  grepl("SCHIZOPHRENIA", dat_SCHIZOPHRENIA$diagnosis)
 dat_SCHIZOPHRENIA = subset(dat_SCHIZOPHRENIA, SCHIZOPHRENIA == TRUE)
 tn_SCHIZOPHRENIA_clinic_by_month =  month_by_diag_fun(dat_SCHIZOPHRENIA)
-tn_SCHIZOPHRENIA_clinic_by_month$sum = apply(tn_SCHIZOPHRENIA_clinic_by_month[-1], 1, mean)
+tn_SCHIZOPHRENIA_clinic_by_month$sum = apply(tn_SCHIZOPHRENIA_clinic_by_month[-c(1,2)], 1, mean)
 tn_SCHIZOPHRENIA_clinic_by_month = tn_SCHIZOPHRENIA_clinic_by_month[order(-tn_SCHIZOPHRENIA_clinic_by_month$sum),]
 tn_SCHIZOPHRENIA_clinic_by_month$sum = NULL
 
