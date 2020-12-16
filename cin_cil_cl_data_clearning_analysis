@@ -27,6 +27,7 @@ schiz_data = subset( schiz_data, age > 17 | is.na(age))
 sum(is.na(schiz_data$age))
 sum(schiz_data$age < 18, na.rm = TRUE)
 library(lubridate)
+library(dplyr)
 
 schiz_data$service_date = ymd(schiz_data$service_date)
 schiz_data$service_date =  floor_date(schiz_data$service_date, unit = "month")
